@@ -857,6 +857,35 @@ def create_user(user_id, name, password, email="", phone="", real_name="", ip_ad
     return get_user_by_id(user_id), None
 
 
+def change_user_password(user_id, current_password, new_password):
+    if not current_password or not new_password:
+        return False, "현재 비밀번호와 새 비밀번호를 모두 입력해 주세요."
+    if len(new_password) < 4:
+        return False, "새 비밀번호는 4자 이상 입력해 주세요."
+    if current_password == new_password:
+        return False, "새 비밀번호는 현재 비밀번호와 다르게 입력해 주세요."
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, password_hash, role FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False, "사용자를 찾을 수 없습니다."
+
+    valid_pw = (current_password == "1234") if not row["password_hash"] else check_password_hash(row["password_hash"], current_password)
+    if not valid_pw:
+        conn.close()
+        return False, "현재 비밀번호가 올바르지 않습니다."
+
+    cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(new_password), user_id))
+    if row["role"] == "admin":
+        log_admin_action(conn, user_id, "CHANGE_PASSWORD", user_id, "관리자 본인 비밀번호 변경")
+    conn.commit()
+    conn.close()
+    return True, None
+
+
 def authenticate_user(user_id, password, ip_addr=""):
     conn = get_db()
     cursor = conn.cursor()
@@ -892,6 +921,35 @@ def authenticate_user(user_id, password, ip_addr=""):
 
     conn.close()
     return get_user_by_id(user_id), None
+
+
+def change_user_password(user_id, current_password, new_password):
+    if not current_password or not new_password:
+        return False, "현재 비밀번호와 새 비밀번호를 모두 입력해 주세요."
+    if len(new_password) < 4:
+        return False, "새 비밀번호는 4자 이상 입력해 주세요."
+    if current_password == new_password:
+        return False, "새 비밀번호는 현재 비밀번호와 다르게 입력해 주세요."
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, password_hash, role FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False, "사용자를 찾을 수 없습니다."
+
+    valid_pw = (current_password == "1234") if not row["password_hash"] else check_password_hash(row["password_hash"], current_password)
+    if not valid_pw:
+        conn.close()
+        return False, "현재 비밀번호가 올바르지 않습니다."
+
+    cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(new_password), user_id))
+    if row["role"] == "admin":
+        log_admin_action(conn, user_id, "CHANGE_PASSWORD", user_id, "관리자 본인 비밀번호 변경")
+    conn.commit()
+    conn.close()
+    return True, None
 
 
 def get_user_by_id(user_id):

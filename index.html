@@ -4568,8 +4568,67 @@
       }
     }
 
+    function toggleChangePasswordBox() {
+      const box = document.getElementById('change-password-box');
+      const delBox = document.getElementById('delete-account-box');
+      if (delBox) delBox.style.display = 'none';
+      if (!box) return;
+      box.style.display = box.style.display === 'none' ? 'block' : 'none';
+      if (box.style.display === 'block') {
+        ['cp-current-pw', 'cp-new-pw', 'cp-confirm-pw'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.value = '';
+        });
+        const first = document.getElementById('cp-current-pw');
+        if (first) first.focus();
+      }
+    }
+
+    async function submitChangePassword() {
+      if (!loggedInUser) return;
+      const curEl = document.getElementById('cp-current-pw');
+      const newEl = document.getElementById('cp-new-pw');
+      const cfmEl = document.getElementById('cp-confirm-pw');
+      const currentPassword = curEl ? curEl.value : '';
+      const newPassword = newEl ? newEl.value : '';
+      const confirmPassword = cfmEl ? cfmEl.value : '';
+
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        alert('현재 비밀번호와 새 비밀번호를 모두 입력해 주세요.');
+        return;
+      }
+      if (newPassword.length < 4) {
+        alert('새 비밀번호는 4자 이상 입력해 주세요.');
+        if (newEl) newEl.focus();
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        alert('새 비밀번호와 확인 입력이 일치하지 않습니다.');
+        if (cfmEl) cfmEl.focus();
+        return;
+      }
+      try {
+        const res = await fetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPassword, newPassword })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          alert(data.error || '비밀번호 변경에 실패했습니다.');
+          return;
+        }
+        toggleChangePasswordBox();
+        alert(data.message || '비밀번호가 성공적으로 변경되었습니다.');
+      } catch (e) {
+        alert('비밀번호 변경 요청 중 오류가 발생했습니다.');
+      }
+    }
+
     function toggleDeleteAccountBox() {
       const box = document.getElementById('delete-account-box');
+      const pwBox = document.getElementById('change-password-box');
+      if (pwBox) pwBox.style.display = 'none';
       if (!box) return;
       box.style.display = box.style.display === 'none' ? 'block' : 'none';
       const pwInput = document.getElementById('delete-account-pw');
@@ -5097,7 +5156,8 @@
           BAN_USER: { label: '회원 영구차단', cls: 'banned' },
           SUSPEND_USER: { label: '회원 일시정지', cls: 'suspended' },
           UNBAN_USER: { label: '제재 해제', cls: 'active' },
-          UNMASK_PII: { label: '개인정보 열람', cls: 'suspended' }
+          UNMASK_PII: { label: '개인정보 열람', cls: 'suspended' },
+          CHANGE_PASSWORD: { label: '비밀번호 변경', cls: 'active' }
         };
         const adminIdsInLogs = Array.from(new Set(['admin', 'admin1', ...auditLogs.map(lg => lg.adminId).filter(Boolean)]));
         const filteredLogs = currentAdminAuditFilter === 'all'
@@ -5157,7 +5217,7 @@
             <p style="font-size:13px; color:#64748b; margin:4px 0 0;">암호화된 회원 신상 관리, 이상 행동 유저 제재 및 관리자 활동 공유 로그를 통합 관리합니다.</p>
           </div>
           <div style="font-size:12.5px; font-weight:700; color:#1e40af; background:#eff6ff; padding:6px 12px; border-radius:999px; border:1px solid #bfdbfe;">
-            현재 접속 관리자: @${(typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : 'admin'}
+            현재 접속 관리자: @${(typeof loggedInUser !== 'undefined' && loggedInUser) ? loggedInUser.id : 'admin'}
           </div>
         </div>
 
@@ -6008,8 +6068,26 @@
                   나의 평균 평점과 채점 분포를 한눈에 확인할 수 있습니다.
                 </p>
               </div>
-              ${!loggedInUser ? `<button class="btn-header-auth" onclick="openAuthModal('register')"><i class="fa-solid fa-user-plus"></i> 내 실제 계정 만들기</button>` : (loggedInUser.role !== 'admin' ? `<button class="btn-header-auth" style="color:#dc2626; border-color:#fecaca; background:#fef2f2;" onclick="toggleDeleteAccountBox()"><i class="fa-solid fa-user-xmark"></i> 회원탈퇴</button>` : '')}
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                ${!loggedInUser
+                  ? `<button class="btn-header-auth" onclick="openAuthModal('register')"><i class="fa-solid fa-user-plus"></i> 내 실제 계정 만들기</button>`
+                  : `<button class="btn-header-auth" onclick="toggleChangePasswordBox()"><i class="fa-solid fa-key"></i> 비밀번호 변경</button>${loggedInUser.role !== 'admin' ? `<button class="btn-header-auth" style="color:#dc2626; border-color:#fecaca; background:#fef2f2;" onclick="toggleDeleteAccountBox()"><i class="fa-solid fa-user-xmark"></i> 회원탈퇴</button>` : ''}`}
+              </div>
             </div>
+            ${loggedInUser ? `
+              <div id="change-password-box" style="display:none; margin-top:14px; padding:14px 16px; border:1px solid #bfdbfe; background:#eff6ff; border-radius:10px;">
+                <div style="font-size:13px; font-weight:800; color:#1e40af; margin-bottom:8px;">
+                  <i class="fa-solid fa-key"></i> 비밀번호 변경
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                  <input type="password" id="cp-current-pw" placeholder="현재 비밀번호" style="flex:1; min-width:150px; padding:8px 12px; border:1px solid #93c5fd; border-radius:8px; font-size:13px; background:#fff;">
+                  <input type="password" id="cp-new-pw" placeholder="새 비밀번호 (4자 이상)" style="flex:1; min-width:160px; padding:8px 12px; border:1px solid #93c5fd; border-radius:8px; font-size:13px; background:#fff;">
+                  <input type="password" id="cp-confirm-pw" placeholder="새 비밀번호 확인" style="flex:1; min-width:160px; padding:8px 12px; border:1px solid #93c5fd; border-radius:8px; font-size:13px; background:#fff;" onkeydown="if(event.key==='Enter') submitChangePassword()">
+                  <button type="button" onclick="submitChangePassword()" style="padding:8px 14px; border:none; border-radius:8px; background:#2563eb; color:#fff; font-size:12.5px; font-weight:700; cursor:pointer;">변경 저장</button>
+                  <button type="button" onclick="toggleChangePasswordBox()" style="padding:8px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; color:#475569; font-size:12.5px; font-weight:600; cursor:pointer;">취소</button>
+                </div>
+              </div>
+            ` : ''}
             ${loggedInUser && loggedInUser.role !== 'admin' ? `
               <div id="delete-account-box" style="display:none; margin-top:14px; padding:14px 16px; border:1px solid #fecaca; background:#fef2f2; border-radius:10px;">
                 <div style="font-size:13px; font-weight:800; color:#991b1b; margin-bottom:6px;">

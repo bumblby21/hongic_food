@@ -364,6 +364,23 @@ def auth_logout():
     return jsonify({"success": True})
 
 
+@app.route("/api/auth/change-password", methods=["POST"])
+def auth_change_password():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "로그인이 필요합니다."}), 401
+    try:
+        data = request.json or {}
+        current_pw = data.get("currentPassword") or ""
+        new_pw = data.get("newPassword") or ""
+        ok, err = database.change_user_password(user_id, current_pw, new_pw)
+        if not ok:
+            return jsonify({"success": False, "error": err}), 400
+        return jsonify({"success": True, "message": "비밀번호가 성공적으로 변경되었습니다."})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/auth/delete-account", methods=["POST"])
 def auth_delete_account():
     user_id = session.get("user_id")
