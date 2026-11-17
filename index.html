@@ -4503,6 +4503,11 @@
         currentUserKey = loggedInUser.id;
         userBookmarkIds = data.bookmarkIds || [];
         await loadDataFromAPI();
+        if (loggedInUser.mustChangePassword) {
+          navigateToMyPage();
+          alert('임시 비밀번호로 로그인하셨습니다.\n보안을 위해 새 비밀번호를 설정해 주세요.');
+          return;
+        }
         closeAuthModal();
         renderList();
         if (document.getElementById('view-mypage').style.display === 'block') {
@@ -4545,6 +4550,11 @@
         currentUserKey = loggedInUser.id;
         userBookmarkIds = [];
         await loadDataFromAPI();
+        if (loggedInUser.mustChangePassword) {
+          navigateToMyPage();
+          alert('임시 비밀번호로 로그인하셨습니다.\n보안을 위해 새 비밀번호를 설정해 주세요.');
+          return;
+        }
         closeAuthModal();
         renderList();
         alert(`환영합니다, ${loggedInUser.name}님! 회원가입이 완료되었습니다.`);
@@ -4618,7 +4628,9 @@
           alert(data.error || '비밀번호 변경에 실패했습니다.');
           return;
         }
+        loggedInUser.mustChangePassword = false;
         toggleChangePasswordBox();
+        renderMyPage();
         alert(data.message || '비밀번호가 성공적으로 변경되었습니다.');
       } catch (e) {
         alert('비밀번호 변경 요청 중 오류가 발생했습니다.');
@@ -4801,6 +4813,7 @@
           : `
             <div style="display:flex; gap:5px; flex-wrap:wrap;">
               ${u.hasPii ? `<button class="btn-admin-sm" onclick="unmaskUserPii('${u.id}')"><i class="fa-solid fa-eye"></i> 신상확인</button>` : ''}
+              <button class="btn-admin-sm" onclick="resetUserPasswordByAdmin('${u.id}')"><i class="fa-solid fa-key"></i> 비번초기화</button>
               ${u.status !== 'suspended' ? `<button class="btn-admin-sm warn" onclick="moderateUser('${u.id}', 'suspended')">일시정지</button>` : ''}
               ${u.status !== 'banned' ? `<button class="btn-admin-sm danger" onclick="moderateUser('${u.id}', 'banned')">영구차단</button>` : ''}
               ${u.status !== 'active' ? `<button class="btn-admin-sm ok" onclick="moderateUser('${u.id}', 'active')">제재해제</button>` : ''}
@@ -5157,7 +5170,8 @@
           SUSPEND_USER: { label: '회원 일시정지', cls: 'suspended' },
           UNBAN_USER: { label: '제재 해제', cls: 'active' },
           UNMASK_PII: { label: '개인정보 열람', cls: 'suspended' },
-          CHANGE_PASSWORD: { label: '비밀번호 변경', cls: 'active' }
+          CHANGE_PASSWORD: { label: '비밀번호 변경', cls: 'active' },
+          RESET_USER_PASSWORD: { label: '임시비번 발급', cls: 'suspended' }
         };
         const adminIdsInLogs = Array.from(new Set(['admin', 'admin1', ...auditLogs.map(lg => lg.adminId).filter(Boolean)]));
         const filteredLogs = currentAdminAuditFilter === 'all'
@@ -5290,6 +5304,26 @@
         }
       } catch (e) {
         alert('서버 통신 오류');
+      }
+    }
+
+    async function resetUserPasswordByAdmin(targetId) {
+      if (!confirm(`'${targetId}' 회원의 비밀번호를 6자리 임시 비밀번호로 초기화하시겠습니까?\n회원이 임시 비밀번호로 로그인하면 새 비밀번호 변경 화면이 표시됩니다.`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/admin/users/${encodeURIComponent(targetId)}/reset-password`, {
+          method: 'POST'
+        });
+        const json = await res.json();
+        if (!json.success) {
+          alert(json.error || '비밀번호 초기화에 실패했습니다.');
+          return;
+        }
+        prompt(`[${targetId}] 임시 비밀번호가 발급되었습니다.\n아래 임시 비밀번호를 복사해서 회원에게 전달해 주세요.`, json.tempPassword);
+        renderAdminPage();
+      } catch (e) {
+        alert('임시 비밀번호 발급 중 오류가 발생했습니다.');
       }
     }
 
@@ -6075,9 +6109,9 @@
               </div>
             </div>
             ${loggedInUser ? `
-              <div id="change-password-box" style="display:none; margin-top:14px; padding:14px 16px; border:1px solid #bfdbfe; background:#eff6ff; border-radius:10px;">
-                <div style="font-size:13px; font-weight:800; color:#1e40af; margin-bottom:8px;">
-                  <i class="fa-solid fa-key"></i> 비밀번호 변경
+              <div id="change-password-box" style="display:${loggedInUser.mustChangePassword ? 'block' : 'none'}; margin-top:14px; padding:14px 16px; border:1px solid ${loggedInUser.mustChangePassword ? '#fbbf24' : '#bfdbfe'}; background:${loggedInUser.mustChangePassword ? '#fffbeb' : '#eff6ff'}; border-radius:10px;">
+                <div style="font-size:13px; font-weight:800; color:${loggedInUser.mustChangePassword ? '#b45309' : '#1e40af'}; margin-bottom:8px;">
+                  <i class="fa-solid fa-key"></i> ${loggedInUser.mustChangePassword ? '임시 비밀번호로 로그인 중입니다 — 새 비밀번호를 설정해 주세요!' : '비밀번호 변경'}
                 </div>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
                   <input type="password" id="cp-current-pw" placeholder="현재 비밀번호" style="flex:1; min-width:150px; padding:8px 12px; border:1px solid #93c5fd; border-radius:8px; font-size:13px; background:#fff;">

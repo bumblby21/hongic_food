@@ -459,6 +459,20 @@ def admin_moderate_user(target_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/admin/users/<target_id>/reset-password", methods=["POST"])
+def admin_reset_password(target_id):
+    admin_user, err_resp = _require_admin()
+    if err_resp:
+        return err_resp
+    try:
+        temp_pw, err = database.admin_reset_user_password(admin_user["id"], target_id)
+        if err:
+            return jsonify({"success": False, "error": err}), 400
+        return jsonify({"success": True, "tempPassword": temp_pw})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/admin/reviews/<int:review_id>", methods=["DELETE"])
 def admin_remove_review(review_id):
     admin_user, err_resp = _require_admin()

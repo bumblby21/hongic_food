@@ -150,6 +150,14 @@ def init_db():
         cursor.execute("ALTER TABLE users ADD COLUMN standard_score REAL NOT NULL DEFAULT 3.0")
     if "created_at" not in existing_cols:
         cursor.execute("ALTER TABLE users ADD COLUMN created_at TIMESTAMP")
+    cursor.execute("""
+        UPDATE users
+        SET created_at = COALESCE(
+            (SELECT MIN(created_at) FROM reviews WHERE reviews.user_id = users.id),
+            CURRENT_TIMESTAMP
+        )
+        WHERE created_at IS NULL OR TRIM(created_at) = ''
+    """)
     if "email_enc" not in existing_cols:
         cursor.execute("ALTER TABLE users ADD COLUMN email_enc TEXT")
     if "phone_enc" not in existing_cols:
@@ -164,6 +172,8 @@ def init_db():
         cursor.execute("ALTER TABLE users ADD COLUMN ban_reason TEXT")
     if "last_ip_hash" not in existing_cols:
         cursor.execute("ALTER TABLE users ADD COLUMN last_ip_hash TEXT")
+    if "must_change_password" not in existing_cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0")
 
     # 2. Restaurants Table
     cursor.execute("""
@@ -291,8 +301,8 @@ def init_db():
         if not cursor.fetchone():
             adm_pw_hash = generate_password_hash(adm_pw)
             cursor.execute("""
-                INSERT INTO users (id, name, password_hash, email_enc, phone_enc, role, status, review_count, rating_sum, standard_score)
-                VALUES (?, ?, ?, ?, ?, 'admin', 'active', 1, 3.0, 3.0)
+                INSERT INTO users (id, name, password_hash, email_enc, phone_enc, role, status, review_count, rating_sum, standard_score, created_at)
+                VALUES (?, ?, ?, ?, ?, 'admin', 'active', 1, 3.0, 3.0, CURRENT_TIMESTAMP)
             """, (adm_id, adm_name, adm_pw_hash, encrypt_pii(adm_email), encrypt_pii(adm_phone)))
         elif os.environ.get(env_key):
             cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(adm_pw), adm_id))
@@ -849,8 +859,8 @@ def create_user(user_id, name, password, email="", phone="", real_name="", ip_ad
     ip_hash = hash_ip(ip_addr)
 
     cursor.execute("""
-        INSERT INTO users (id, name, password_hash, email_enc, phone_enc, real_name_enc, role, status, last_ip_hash, review_count, rating_sum, standard_score)
-        VALUES (?, ?, ?, ?, ?, ?, 'user', 'active', ?, 1, 3.0, 3.0)
+        INSERT INTO users (id, name, password_hash, email_enc, phone_enc, real_name_enc, role, status, last_ip_hash, review_count, rating_sum, standard_score, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'user', 'active', ?, 1, 3.0, 3.0, CURRENT_TIMESTAMP)
     """, (user_id, name, pw_hash, email_enc, phone_enc, real_name_enc, ip_hash))
     conn.commit()
     conn.close()
@@ -944,12 +954,42 @@ def change_user_password(user_id, current_password, new_password):
         conn.close()
         return False, "현재 비밀번호가 올바르지 않습니다."
 
-    cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(new_password), user_id))
+    cursor.execute(
+        "UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?",
+        (generate_password_hash(new_password), user_id)
+    )
     if row["role"] == "admin":
         log_admin_action(conn, user_id, "CHANGE_PASSWORD", user_id, "관리자 본인 비밀번호 변경")
     conn.commit()
     conn.close()
     return True, None
+
+
+def admin_reset_user_password(admin_id, target_user_id):
+    clean_uid = (target_user_id or "").strip()
+    if not clean_uid:
+        return None, "대상 아이디가 필요합니다."
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, role FROM users WHERE id = ?", (clean_uid,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None, "대상 회원을 찾을 수 없습니다."
+    if row["role"] == "admin":
+        conn.close()
+        return None, "관리자 계정의 비밀번호는 직접 초기화할 수 없습니다."
+
+    temp_pw = str(secrets.randbelow(900000) + 100000)
+    cursor.execute(
+        "UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?",
+        (generate_password_hash(temp_pw), clean_uid)
+    )
+    log_admin_action(conn, admin_id, "RESET_USER_PASSWORD", clean_uid, "임시 비밀번호 발급 (로그인 후 새 비밀번호 변경 필요)")
+    conn.commit()
+    conn.close()
+    return temp_pw, None
 
 
 def get_user_by_id(user_id):
@@ -966,7 +1006,8 @@ def get_user_by_id(user_id):
         "name": row["name"],
         "role": row["role"] if "role" in keys and row["role"] else "user",
         "status": row["status"] if "status" in keys and row["status"] else "active",
-        "standardScore": row["standard_score"] if "standard_score" in keys and row["standard_score"] is not None else 3.0
+        "standardScore": row["standard_score"] if "standard_score" in keys and row["standard_score"] is not None else 3.0,
+        "mustChangePassword": bool(row["must_change_password"]) if "must_change_password" in keys and row["must_change_password"] else False
     }
 
 
