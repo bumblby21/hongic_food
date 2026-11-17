@@ -4872,7 +4872,9 @@
         return `
           <tr>
             <td style="font-weight:700; color:#0f172a;">#${rv.id}</td>
-            <td>${rv.restaurantName}</td>
+            <td>
+              <button type="button" onclick="goToReviewFromAdmin(${rv.restaurantId}, ${rv.id})" style="background:none;border:none;padding:0;font-weight:700;color:#0f172a;cursor:pointer;text-align:left;text-decoration:underline;text-decoration-color:#cbd5e1;" title="해당 식당 리뷰 위치로 이동">${rv.restaurantName}</button>
+            </td>
             <td>
               <div style="font-weight:700;">${rv.userName}</div>
               <button type="button" onclick="viewUserReviewsInAdmin('${rv.userId}')" style="background:none;border:none;padding:0;font-size:11px;color:#2563eb;cursor:pointer;text-decoration:underline;" title="이 작성자 리뷰만 보기">@${rv.userId}</button>
@@ -4881,12 +4883,19 @@
               <div>★ ${Number(rv.score).toFixed(1)}</div>
               ${receiptBadge}
             </td>
-            <td style="max-width:300px; font-size:12.5px; color:#334155;">${rv.comment}</td>
+            <td style="max-width:300px; font-size:12.5px; color:#334155;">
+              <div onclick="goToReviewFromAdmin(${rv.restaurantId}, ${rv.id})" style="cursor:pointer; line-height:1.45;" title="클릭하여 실제 리뷰로 이동">${rv.comment}</div>
+            </td>
             <td style="font-size:12px; color:#475569; white-space:nowrap;">${tsDisplay}</td>
             <td>
-              <button class="btn-admin-sm danger" onclick="adminDeleteReview(${rv.id})">
-                <i class="fa-solid fa-trash"></i> 삭제
-              </button>
+              <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                <button class="btn-admin-sm" onclick="goToReviewFromAdmin(${rv.restaurantId}, ${rv.id})" title="실제 리뷰 위치로 이동">
+                  <i class="fa-solid fa-arrow-up-right-from-square"></i> 보기
+                </button>
+                <button class="btn-admin-sm danger" onclick="adminDeleteReview(${rv.id})">
+                  <i class="fa-solid fa-trash"></i> 삭제
+                </button>
+              </div>
             </td>
           </tr>
         `;
@@ -6998,7 +7007,12 @@
     let currentDetailTime = 'dinner';
     let currentDetailBudget = '15,000원 ~ 20,000원';
 
-    async function navigateToDetail(id, pushState = true, initialTab = 'overview') {
+    function goToReviewFromAdmin(restaurantId, reviewId) {
+      if (!restaurantId) return;
+      navigateToDetail(restaurantId, true, 'reviews', reviewId);
+    }
+
+    async function navigateToDetail(id, pushState = true, initialTab = 'overview', targetReviewId = null) {
       currentDetailRestaurantId = id;
       currentSliderIndex = 0;
       currentDetailTab = initialTab;
@@ -7019,6 +7033,23 @@
       detailView.style.display = 'block';
       window.scrollTo({ top: 0, behavior: 'smooth' });
 
+      const focusTargetReview = () => {
+        if (!targetReviewId) return;
+        setTimeout(() => {
+          const revEl = document.getElementById(`detail-review-${targetReviewId}`);
+          if (revEl) {
+            revEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            revEl.style.transition = 'background-color 0.6s ease, box-shadow 0.6s ease';
+            revEl.style.backgroundColor = '#fef9c3';
+            revEl.style.boxShadow = '0 0 0 2px #f59e0b';
+            setTimeout(() => {
+              revEl.style.backgroundColor = '';
+              revEl.style.boxShadow = '';
+            }, 2200);
+          }
+        }, 80);
+      };
+
       // Fetch fresh restaurant details from SQLite
       try {
         const res = await fetch(`/api/restaurants/${id}`);
@@ -7028,6 +7059,7 @@
           const idx = restaurants.findIndex(x => x.id === id);
           if (idx !== -1) restaurants[idx] = json.data;
           renderDetailPage(currentRestaurantData);
+          focusTargetReview();
           return;
         }
       } catch (err) {
@@ -7038,6 +7070,7 @@
       if (fallback) {
         currentRestaurantData = fallback;
         renderDetailPage(fallback);
+        focusTargetReview();
       }
     }
 
@@ -7618,7 +7651,7 @@
               ` : r.reviews.map(rev => {
                 const rCrit = rev.criteria || {};
                 return `
-                  <div class="tabelog-review-row">
+                  <div class="tabelog-review-row" id="detail-review-${rev.id}" style="scroll-margin-top:calc(var(--header-h, 70px) + 18px);">
                     <div class="review-user-row">
                       <span class="review-user-name">
                         <span style="white-space:nowrap;"><i class="fa-solid fa-user-circle" style="color:#64748b; font-size:16px;"></i> ${rev.userName}</span>
