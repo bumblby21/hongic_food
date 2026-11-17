@@ -1,0 +1,8 @@
+# Private server secrets & local runtime files (NEVER commit to Git/GitHub)
+SERVER_PRIVATE_BACKUP/
+*.key
+.env
+hongchelin.db
+uploads/
+__pycache__/
+.venv/
