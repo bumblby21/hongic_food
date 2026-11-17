@@ -3864,27 +3864,16 @@
 
           <!-- Step 1: Browse & Search (Hidden once user selects a place to focus on writing review) -->
           <div id="add-place-browse-step">
-            <div class="modal-step-title">1. 네이버 지도 음식점 검색 또는 지도 영역 탐색</div>
+            <div class="modal-step-title">1. 네이버 지도 음식점 검색</div>
             <p style="font-size:12px; color:#64748b; margin-bottom:8px;">
-              식당명·지역을 검색하거나 지도를 이동해 네이버 지도의 실제 음식점을 선택하세요.
+              등록하려는 음식점 이름이나 지역+상호명을 검색해 선택하세요.
             </p>
 
             <div class="place-search-input-wrap">
-              <input type="text" id="add-place-query" class="place-search-input" placeholder="네이버 지도 음식점 검색 (예: 성수 갈비, 우래옥)" onkeydown="if(event.key==='Enter') searchPlaceForAdd()">
+              <input type="text" id="add-place-query" class="place-search-input" placeholder="음식점 이름 검색 (예: 성수 갈비, 우래옥)" onkeydown="if(event.key==='Enter') searchPlaceForAdd()">
               <button type="button" class="btn-place-search" onclick="searchPlaceForAdd()">
                 <i class="fa-solid fa-magnifying-glass"></i> 검색
               </button>
-            </div>
-
-            <!-- Quick Category Filter Chips in Current Map Area -->
-            <div class="naver-cat-chips">
-              <button type="button" class="naver-cat-chip active" onclick="filterNaverCategory(this, '음식점')">전체 음식점</button>
-              <button type="button" class="naver-cat-chip" onclick="filterNaverCategory(this, '한식')">한식</button>
-              <button type="button" class="naver-cat-chip" onclick="filterNaverCategory(this, '고기집')">고기·구이</button>
-              <button type="button" class="naver-cat-chip" onclick="filterNaverCategory(this, '일식 초밥')">일식·초밥</button>
-              <button type="button" class="naver-cat-chip" onclick="filterNaverCategory(this, '양식 파스타')">양식·파스타</button>
-              <button type="button" class="naver-cat-chip" onclick="filterNaverCategory(this, '중식')">중식</button>
-              <button type="button" class="naver-cat-chip" onclick="filterNaverCategory(this, '카페 디저트')">카페·디저트</button>
             </div>
 
             <!-- Search Results List -->
@@ -4055,12 +4044,7 @@
             <input type="text" id="add-mobile-query" class="map-mobile-search" placeholder="네이버 지도 음식점 검색..." oninput="const pq=document.getElementById('add-place-query'); if(pq) pq.value=this.value;" onkeydown="if(event.key==='Enter') { document.getElementById('add-place-query').value=this.value; searchPlaceForAdd(); }">
             <button type="button" onclick="document.getElementById('add-place-query').value=document.getElementById('add-mobile-query').value; searchPlaceForAdd();" style="background:#03c75a;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:800;flex-shrink:0;">검색</button>
           </div>
-          <div class="map-hint-floating">
-            <button type="button" class="btn-map-reload-area" onclick="isPlaceSelectedForReview=false; searchNaverPlacesInCurrentMapBounds()">
-              <i class="fa-solid fa-rotate"></i> 현 지도 영역의 네이버 지도 음식점 불러오기
-            </button>
-          </div>
-          <button type="button" class="map-gps-btn" onclick="moveMapToMyLocation('add', this)" title="내 주변 음식점 찾기">
+          <button type="button" class="map-gps-btn" onclick="moveMapToMyLocation('add', this)" title="내 위치로 이동">
             <i class="fa-solid fa-location-crosshairs"></i> 내 위치
           </button>
           <div id="modal-interactive-map"></div>
@@ -6329,7 +6313,6 @@
             if (addMyLocMarker) modalInteractiveMap.removeLayer(addMyLocMarker);
             addMyLocMarker = L.marker([lat, lng], { icon: dotIcon, interactive: false }).addTo(modalInteractiveMap);
             modalInteractiveMap.setView([lat, lng], 16);
-            searchNaverPlacesInCurrentMapBounds();
           } else if (map) {
             if (exploreMyLocMarker) map.removeLayer(exploreMyLocMarker);
             exploreMyLocMarker = L.marker([lat, lng], { icon: dotIcon, interactive: false }).addTo(map);
@@ -8177,10 +8160,15 @@
       if (modal) modal.classList.add('open');
       syncBodyScrollLock();
 
-      // Initialize map and automatically load real Naver Map restaurants in current map view
+      const resContainer = document.getElementById('add-place-search-results');
+      if (resContainer) {
+        resContainer.style.display = 'block';
+        resContainer.innerHTML = '<div style="padding:20px 14px; text-align:center; color:#64748b; font-size:12.5px;"><i class="fa-solid fa-magnifying-glass" style="color:#03c75a; margin-right:4px;"></i> 음식점 이름을 입력하고 <b>검색</b>을 눌러주세요.</div>';
+      }
+
+      // Initialize map only (do not auto-fetch nearby restaurants to save traffic)
       setTimeout(() => {
         initModalSearchMap();
-        searchNaverPlacesInCurrentMapBounds();
       }, 220);
     }
 
@@ -8197,25 +8185,6 @@
           attribution: '&copy; NAVER Corp.',
           maxZoom: 20
         }).addTo(modalInteractiveMap);
-
-        // 500ms Debounce: Only fetch restaurants when map dragging/zooming has paused
-        // Skip auto-fetch when zoomed way out (<= 13) or moved minimally (< ~120m)
-        modalInteractiveMap.on('moveend', () => {
-          if (isPlaceSelectedForReview) return;
-          const z = modalInteractiveMap.getZoom();
-          if (z <= 13) return;
-          const c = modalInteractiveMap.getCenter();
-          if (window._lastModalFetchState) {
-            const prev = window._lastModalFetchState;
-            if (prev.zoom === z && Math.abs(c.lat - prev.lat) < 0.0012 && Math.abs(c.lng - prev.lng) < 0.0012) {
-              return;
-            }
-          }
-          if (modalMapDebounceTimer) clearTimeout(modalMapDebounceTimer);
-          modalMapDebounceTimer = setTimeout(() => {
-            if (!isPlaceSelectedForReview) searchNaverPlacesInCurrentMapBounds();
-          }, 500);
-        });
 
         modalInteractiveMap.on('click', () => {
           if (window.innerWidth <= 768) {
@@ -8464,7 +8433,12 @@
       const input = document.getElementById('add-place-query');
       const q = input ? input.value.trim() : '';
       if (!q) {
-        await searchNaverPlacesInCurrentMapBounds();
+        const resContainer = document.getElementById('add-place-search-results');
+        if (resContainer) {
+          resContainer.style.display = 'block';
+          resContainer.innerHTML = '<div style="padding:16px; text-align:center; color:#dc2626; font-size:12.5px; font-weight:600;">검색할 음식점 이름을 입력해 주세요.</div>';
+        }
+        if (input) input.focus();
         return;
       }
 
@@ -8481,7 +8455,7 @@
         lat: lat,
         lng: lng,
         bounds: '',
-        fitMapToResults: false
+        fitMapToResults: true
       });
     }
 
