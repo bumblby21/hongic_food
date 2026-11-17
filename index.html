@@ -4397,6 +4397,9 @@
         }
         renderAuthHeader();
         renderDynamicAreaTabs();
+        if (loggedInUser && loggedInUser.mustChangePassword && typeof openForceResetModal === 'function') {
+          openForceResetModal();
+        }
       } catch (err) {
         console.warn("백엔드 API 연결 대기 중 (기본 캐시 사용):", err);
       }
@@ -4503,13 +4506,12 @@
         currentUserKey = loggedInUser.id;
         userBookmarkIds = data.bookmarkIds || [];
         await loadDataFromAPI();
-        if (loggedInUser.mustChangePassword) {
-          navigateToMyPage();
-          alert('임시 비밀번호로 로그인하셨습니다.\n보안을 위해 새 비밀번호를 설정해 주세요.');
-          return;
-        }
         closeAuthModal();
         renderList();
+        if (loggedInUser && loggedInUser.mustChangePassword) {
+          openForceResetModal();
+          return;
+        }
         if (document.getElementById('view-mypage').style.display === 'block') {
           renderMyPage();
         }
@@ -4578,69 +4580,82 @@
       }
     }
 
-    function toggleChangePasswordBox() {
-      const box = document.getElementById('change-password-box');
-      const delBox = document.getElementById('delete-account-box');
-      if (delBox) delBox.style.display = 'none';
-      if (!box) return;
-      box.style.display = box.style.display === 'none' ? 'block' : 'none';
-      if (box.style.display === 'block') {
-        ['cp-current-pw', 'cp-new-pw', 'cp-confirm-pw'].forEach(id => {
-          const el = document.getElementById(id);
-          if (el) el.value = '';
-        });
-        const first = document.getElementById('cp-current-pw');
-        if (first) first.focus();
+    function openForceResetModal() {
+      let modal = document.getElementById('force-reset-modal');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'force-reset-modal';
+        modal.style.cssText = 'position:fixed; inset:0; background:rgba(15,23,42,0.75); z-index:99999; display:flex; align-items:center; justify-content:center; padding:16px;';
+        modal.innerHTML = `
+          <div style="width:100%; max-width:400px; background:#fff; border-radius:14px; padding:24px; box-shadow:0 20px 50px rgba(0,0,0,0.3);">
+            <div style="font-size:18px; font-weight:900; color:#0f172a; margin-bottom:6px;">
+              <i class="fa-solid fa-key" style="color:#d97706;"></i> 새 비밀번호 설정 필요
+            </div>
+            <p style="font-size:13px; color:#475569; line-height:1.55; margin:0 0 16px;">
+              임시 비밀번호로 로그인하셨습니다.<br>
+              안전한 이용을 위해 <b>새 비밀번호를 설정</b>하셔야 서비스를 계속 이용하실 수 있습니다.
+            </p>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <input type="password" id="force-new-pw" placeholder="새 비밀번호 입력 (4자 이상)" style="width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;">
+              <input type="password" id="force-confirm-pw" placeholder="새 비밀번호 다시 입력" style="width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px;" onkeydown="if(event.key==='Enter') submitForceResetPassword()">
+              <button type="button" onclick="submitForceResetPassword()" style="width:100%; padding:11px; border:none; border-radius:8px; background:#2563eb; color:#fff; font-size:14px; font-weight:800; cursor:pointer;">새 비밀번호 설정 완료</button>
+              <button type="button" onclick="logoutForceReset()" style="width:100%; padding:8px; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; color:#64748b; font-size:12.5px; font-weight:600; cursor:pointer;">로그아웃</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
       }
+      modal.style.display = 'flex';
+      const pwEl = document.getElementById('force-new-pw');
+      const cfEl = document.getElementById('force-confirm-pw');
+      if (pwEl) { pwEl.value = ''; pwEl.focus(); }
+      if (cfEl) cfEl.value = '';
     }
 
-    async function submitChangePassword() {
-      if (!loggedInUser) return;
-      const curEl = document.getElementById('cp-current-pw');
-      const newEl = document.getElementById('cp-new-pw');
-      const cfmEl = document.getElementById('cp-confirm-pw');
-      const currentPassword = curEl ? curEl.value : '';
-      const newPassword = newEl ? newEl.value : '';
-      const confirmPassword = cfmEl ? cfmEl.value : '';
+    async function submitForceResetPassword() {
+      const pwEl = document.getElementById('force-new-pw');
+      const cfEl = document.getElementById('force-confirm-pw');
+      const newPassword = pwEl ? pwEl.value : '';
+      const confirmPassword = cfEl ? cfEl.value : '';
 
-      if (!currentPassword || !newPassword || !confirmPassword) {
-        alert('현재 비밀번호와 새 비밀번호를 모두 입력해 주세요.');
-        return;
-      }
-      if (newPassword.length < 4) {
+      if (!newPassword || newPassword.length < 4) {
         alert('새 비밀번호는 4자 이상 입력해 주세요.');
-        if (newEl) newEl.focus();
+        if (pwEl) pwEl.focus();
         return;
       }
       if (newPassword !== confirmPassword) {
         alert('새 비밀번호와 확인 입력이 일치하지 않습니다.');
-        if (cfmEl) cfmEl.focus();
+        if (cfEl) cfEl.focus();
         return;
       }
       try {
         const res = await fetch('/api/auth/change-password', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ currentPassword, newPassword })
+          body: JSON.stringify({ newPassword })
         });
         const data = await res.json();
         if (!res.ok || !data.success) {
-          alert(data.error || '비밀번호 변경에 실패했습니다.');
+          alert(data.error || '새 비밀번호 설정에 실패했습니다.');
           return;
         }
-        loggedInUser.mustChangePassword = false;
-        toggleChangePasswordBox();
-        renderMyPage();
-        alert(data.message || '비밀번호가 성공적으로 변경되었습니다.');
+        if (loggedInUser) loggedInUser.mustChangePassword = false;
+        const modal = document.getElementById('force-reset-modal');
+        if (modal) modal.style.display = 'none';
+        alert('새 비밀번호가 설정되었습니다. 이제 정상적으로 이용하실 수 있습니다!');
       } catch (e) {
-        alert('비밀번호 변경 요청 중 오류가 발생했습니다.');
+        alert('비밀번호 설정 중 오류가 발생했습니다.');
       }
+    }
+
+    async function logoutForceReset() {
+      const modal = document.getElementById('force-reset-modal');
+      if (modal) modal.style.display = 'none';
+      if (typeof submitLogout === 'function') await submitLogout();
     }
 
     function toggleDeleteAccountBox() {
       const box = document.getElementById('delete-account-box');
-      const pwBox = document.getElementById('change-password-box');
-      if (pwBox) pwBox.style.display = 'none';
       if (!box) return;
       box.style.display = box.style.display === 'none' ? 'block' : 'none';
       const pwInput = document.getElementById('delete-account-pw');
@@ -6102,26 +6117,8 @@
                   나의 평균 평점과 채점 분포를 한눈에 확인할 수 있습니다.
                 </p>
               </div>
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                ${!loggedInUser
-                  ? `<button class="btn-header-auth" onclick="openAuthModal('register')"><i class="fa-solid fa-user-plus"></i> 내 실제 계정 만들기</button>`
-                  : `<button class="btn-header-auth" onclick="toggleChangePasswordBox()"><i class="fa-solid fa-key"></i> 비밀번호 변경</button>${loggedInUser.role !== 'admin' ? `<button class="btn-header-auth" style="color:#dc2626; border-color:#fecaca; background:#fef2f2;" onclick="toggleDeleteAccountBox()"><i class="fa-solid fa-user-xmark"></i> 회원탈퇴</button>` : ''}`}
-              </div>
+              ${!loggedInUser ? `<button class="btn-header-auth" onclick="openAuthModal('register')"><i class="fa-solid fa-user-plus"></i> 내 실제 계정 만들기</button>` : (loggedInUser.role !== 'admin' ? `<button class="btn-header-auth" style="color:#dc2626; border-color:#fecaca; background:#fef2f2;" onclick="toggleDeleteAccountBox()"><i class="fa-solid fa-user-xmark"></i> 회원탈퇴</button>` : '')}
             </div>
-            ${loggedInUser ? `
-              <div id="change-password-box" style="display:${loggedInUser.mustChangePassword ? 'block' : 'none'}; margin-top:14px; padding:14px 16px; border:1px solid ${loggedInUser.mustChangePassword ? '#fbbf24' : '#bfdbfe'}; background:${loggedInUser.mustChangePassword ? '#fffbeb' : '#eff6ff'}; border-radius:10px;">
-                <div style="font-size:13px; font-weight:800; color:${loggedInUser.mustChangePassword ? '#b45309' : '#1e40af'}; margin-bottom:8px;">
-                  <i class="fa-solid fa-key"></i> ${loggedInUser.mustChangePassword ? '임시 비밀번호로 로그인 중입니다 — 새 비밀번호를 설정해 주세요!' : '비밀번호 변경'}
-                </div>
-                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                  <input type="password" id="cp-current-pw" placeholder="현재 비밀번호" style="flex:1; min-width:150px; padding:8px 12px; border:1px solid #93c5fd; border-radius:8px; font-size:13px; background:#fff;">
-                  <input type="password" id="cp-new-pw" placeholder="새 비밀번호 (4자 이상)" style="flex:1; min-width:160px; padding:8px 12px; border:1px solid #93c5fd; border-radius:8px; font-size:13px; background:#fff;">
-                  <input type="password" id="cp-confirm-pw" placeholder="새 비밀번호 확인" style="flex:1; min-width:160px; padding:8px 12px; border:1px solid #93c5fd; border-radius:8px; font-size:13px; background:#fff;" onkeydown="if(event.key==='Enter') submitChangePassword()">
-                  <button type="button" onclick="submitChangePassword()" style="padding:8px 14px; border:none; border-radius:8px; background:#2563eb; color:#fff; font-size:12.5px; font-weight:700; cursor:pointer;">변경 저장</button>
-                  <button type="button" onclick="toggleChangePasswordBox()" style="padding:8px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; color:#475569; font-size:12.5px; font-weight:600; cursor:pointer;">취소</button>
-                </div>
-              </div>
-            ` : ''}
             ${loggedInUser && loggedInUser.role !== 'admin' ? `
               <div id="delete-account-box" style="display:none; margin-top:14px; padding:14px 16px; border:1px solid #fecaca; background:#fef2f2; border-radius:10px;">
                 <div style="font-size:13px; font-weight:800; color:#991b1b; margin-bottom:6px;">

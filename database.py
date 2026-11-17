@@ -992,6 +992,32 @@ def admin_reset_user_password(admin_id, target_user_id):
     return temp_pw, None
 
 
+def set_new_password_after_reset(user_id, new_password):
+    if not new_password or len(new_password) < 4:
+        return False, "새 비밀번호는 4자 이상 입력해 주세요."
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, must_change_password, role FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False, "사용자를 찾을 수 없습니다."
+    if not row["must_change_password"]:
+        conn.close()
+        return False, "임시 비밀번호 재설정 대상 계정이 아닙니다."
+
+    cursor.execute(
+        "UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?",
+        (generate_password_hash(new_password), user_id)
+    )
+    if row["role"] == "admin":
+        log_admin_action(conn, user_id, "CHANGE_PASSWORD", user_id, "임시 비밀번호 로그인 후 새 비밀번호 설정")
+    conn.commit()
+    conn.close()
+    return True, None
+
+
 def get_user_by_id(user_id):
     conn = get_db()
     cursor = conn.cursor()

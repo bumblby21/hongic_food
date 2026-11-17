@@ -371,12 +371,16 @@ def auth_change_password():
         return jsonify({"success": False, "error": "로그인이 필요합니다."}), 401
     try:
         data = request.json or {}
-        current_pw = data.get("currentPassword") or ""
         new_pw = data.get("newPassword") or ""
-        ok, err = database.change_user_password(user_id, current_pw, new_pw)
+        current_pw = data.get("currentPassword") or ""
+        user = database.get_user_by_id(user_id)
+        if user and user.get("mustChangePassword"):
+            ok, err = database.set_new_password_after_reset(user_id, new_pw)
+        else:
+            ok, err = database.change_user_password(user_id, current_pw, new_pw)
         if not ok:
             return jsonify({"success": False, "error": err}), 400
-        return jsonify({"success": True, "message": "비밀번호가 성공적으로 변경되었습니다."})
+        return jsonify({"success": True, "message": "새 비밀번호가 설정되었습니다."})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
