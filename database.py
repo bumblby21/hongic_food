@@ -15,6 +15,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hongchelin.db")
 PII_SECRET = os.environ.get("HONGCHELIN_PII_KEY", "hongchelin-pii-master-key-2026-dev")
 DEFAULT_ADMIN_PASSWORD = os.environ.get("HONGCHELIN_ADMIN_PASSWORD", "admin1234")
+DEFAULT_ADMIN1_PASSWORD = os.environ.get("HONGCHELIN_ADMIN1_PASSWORD", "hongic")
 
 
 def _derive_pii_keys():
@@ -248,9 +249,16 @@ def init_db():
             reason TEXT NOT NULL,
             detail TEXT,
             status TEXT NOT NULL DEFAULT 'pending',
+            resolved_by TEXT,
+            resolved_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    for col_def in ("resolved_by TEXT", "resolved_at TIMESTAMP"):
+        try:
+            cursor.execute(f"ALTER TABLE reports ADD COLUMN {col_def}")
+        except sqlite3.OperationalError:
+            pass
 
     # 7. Feedbacks Table (사용자 오류/버그 제보 및 개선 의견)
     cursor.execute("""
@@ -262,24 +270,32 @@ def init_db():
             device_info TEXT,
             photos TEXT DEFAULT '[]',
             status TEXT NOT NULL DEFAULT 'pending',
+            resolved_by TEXT,
+            resolved_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    try:
-        cursor.execute("ALTER TABLE feedbacks ADD COLUMN photos TEXT DEFAULT '[]'")
-    except sqlite3.OperationalError:
-        pass
+    for col_def in ("photos TEXT DEFAULT '[]'", "resolved_by TEXT", "resolved_at TIMESTAMP"):
+        try:
+            cursor.execute(f"ALTER TABLE feedbacks ADD COLUMN {col_def}")
+        except sqlite3.OperationalError:
+            pass
 
-    # Ensure default admin account exists (sync password if HONGCHELIN_ADMIN_PASSWORD is set)
-    cursor.execute("SELECT id FROM users WHERE id = 'admin'")
-    if not cursor.fetchone():
-        admin_pw_hash = generate_password_hash(DEFAULT_ADMIN_PASSWORD)
-        cursor.execute("""
-            INSERT INTO users (id, name, password_hash, email_enc, phone_enc, role, status, review_count, rating_sum, standard_score)
-            VALUES ('admin', '총괄 관리자', ?, ?, ?, 'admin', 'active', 1, 3.0, 3.0)
-        """, (admin_pw_hash, encrypt_pii("admin@hongchelin.local"), encrypt_pii("010-0000-0000")))
-    elif os.environ.get("HONGCHELIN_ADMIN_PASSWORD"):
-        cursor.execute("UPDATE users SET password_hash = ? WHERE id = 'admin'", (generate_password_hash(DEFAULT_ADMIN_PASSWORD),))
+    # Ensure default admin accounts exist (admin & admin1)
+    default_admins = [
+        ("admin", "총괄 관리자", DEFAULT_ADMIN_PASSWORD, "HONGCHELIN_ADMIN_PASSWORD", "admin@hongchelin.local", "010-0000-0000"),
+        ("admin1", "공동 관리자", DEFAULT_ADMIN1_PASSWORD, "HONGCHELIN_ADMIN1_PASSWORD", "admin1@hongchelin.local", "010-0000-0001"),
+    ]
+    for adm_id, adm_name, adm_pw, env_key, adm_email, adm_phone in default_admins:
+        cursor.execute("SELECT id FROM users WHERE id = ?", (adm_id,))
+        if not cursor.fetchone():
+            adm_pw_hash = generate_password_hash(adm_pw)
+            cursor.execute("""
+                INSERT INTO users (id, name, password_hash, email_enc, phone_enc, role, status, review_count, rating_sum, standard_score)
+                VALUES (?, ?, ?, ?, ?, 'admin', 'active', 1, 3.0, 3.0)
+            """, (adm_id, adm_name, adm_pw_hash, encrypt_pii(adm_email), encrypt_pii(adm_phone)))
+        elif os.environ.get(env_key):
+            cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(adm_pw), adm_id))
 
     conn.commit()
 
@@ -1202,7 +1218,7 @@ def get_admin_overview():
         SELECT id, admin_id, action, target_id, detail, created_at
         FROM admin_audit_logs
         ORDER BY id DESC
-        LIMIT 50
+        LIMIT 100
     """)
     audit_logs = [
         {
@@ -1217,7 +1233,8 @@ def get_admin_overview():
     ]
 
     cursor.execute("""
-        SELECT rp.id, rp.review_id, rp.reporter_id, rp.reason, rp.detail, rp.status, rp.created_at,
+        SELECT rp.id, rp.review_id, rp.reporter_id, rp.reason, rp.detail, rp.status,
+               rp.resolved_by, rp.resolved_at, rp.created_at,
                r.user_id AS author_id, r.user_name AS author_name, r.comment AS review_comment,
                rest.name AS restaurant_name
         FROM reports rp
@@ -1234,6 +1251,8 @@ def get_admin_overview():
             "reason": rp["reason"],
             "detail": rp["detail"] or "",
             "status": rp["status"],
+            "resolvedBy": rp["resolved_by"] or "",
+            "resolvedAt": rp["resolved_at"] or "",
             "createdAt": rp["created_at"],
             "authorId": rp["author_id"] or "-",
             "authorName": rp["author_name"] or "(삭제된 리뷰)",
@@ -1245,7 +1264,7 @@ def get_admin_overview():
     pending_reports_count = sum(1 for rp in reports_list if rp["status"] == "pending")
 
     cursor.execute("""
-        SELECT id, user_id, category, message, device_info, photos, status, created_at
+        SELECT id, user_id, category, message, device_info, photos, status, resolved_by, resolved_at, created_at
         FROM feedbacks
         ORDER BY CASE WHEN status = 'pending' THEN 0 ELSE 1 END, id DESC
         LIMIT 50
@@ -1264,6 +1283,8 @@ def get_admin_overview():
             "deviceInfo": fb["device_info"] or "",
             "photos": fb_photos if isinstance(fb_photos, list) else [],
             "status": fb["status"],
+            "resolvedBy": fb["resolved_by"] or "",
+            "resolvedAt": fb["resolved_at"] or "",
             "createdAt": fb["created_at"]
         })
     pending_feedbacks_count = sum(1 for fb in feedbacks_list if fb["status"] == "pending")
@@ -1467,7 +1488,10 @@ def resolve_report(admin_id, report_id, action):
         return False, "신고 내역을 찾을 수 없습니다."
 
     if action == "dismiss":
-        cursor.execute("UPDATE reports SET status = 'dismissed' WHERE id = ?", (report_id,))
+        cursor.execute(
+            "UPDATE reports SET status = 'dismissed', resolved_by = ?, resolved_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (admin_id, report_id)
+        )
         log_admin_action(conn, admin_id, "DISMISS_REPORT", f"report#{report_id}", "신고 기각 처리")
     else:
         cursor.execute("SELECT id, user_id, comment FROM reviews WHERE id = ?", (rp["review_id"],))
@@ -1475,7 +1499,10 @@ def resolve_report(admin_id, report_id, action):
         author_id = rv["user_id"] if rv else None
         if rv:
             cursor.execute("DELETE FROM reviews WHERE id = ?", (rv["id"],))
-        cursor.execute("UPDATE reports SET status = 'resolved' WHERE review_id = ?", (rp["review_id"],))
+        cursor.execute(
+            "UPDATE reports SET status = 'resolved', resolved_by = ?, resolved_at = CURRENT_TIMESTAMP WHERE review_id = ?",
+            (admin_id, rp["review_id"])
+        )
 
         if action == "ban_author" and author_id and author_id != admin_id:
             cursor.execute(
@@ -1508,8 +1535,14 @@ def create_feedback(user_id, category, message, device_info="", photos=None):
 def resolve_feedback(admin_id, feedback_id):
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("UPDATE feedbacks SET status = 'resolved' WHERE id = ?", (feedback_id,))
-    log_admin_action(conn, admin_id, "RESOLVE_FEEDBACK", f"feedback#{feedback_id}", "사용자 오류/제보 확인 완료")
+    cursor.execute("SELECT user_id, message FROM feedbacks WHERE id = ?", (feedback_id,))
+    fb = cursor.fetchone()
+    cursor.execute(
+        "UPDATE feedbacks SET status = 'resolved', resolved_by = ?, resolved_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (admin_id, feedback_id)
+    )
+    fb_summary = f"제보자 @{fb['user_id']} / {(fb['message'] or '')[:35]}" if fb else "사용자 오류/제보 확인 완료"
+    log_admin_action(conn, admin_id, "RESOLVE_FEEDBACK", f"feedback#{feedback_id}", fb_summary)
     conn.commit()
     conn.close()
     return True

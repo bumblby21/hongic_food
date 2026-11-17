@@ -4859,8 +4859,15 @@
       renderAdminPage();
     }
 
+    let currentAdminAuditFilter = 'all';
+
     function switchAdminTab(tab) {
       currentAdminTab = tab;
+      renderAdminContent();
+    }
+
+    function setAdminAuditFilter(adminFilter) {
+      currentAdminAuditFilter = adminFilter || 'all';
       renderAdminContent();
     }
 
@@ -4995,7 +5002,12 @@
               <button class="btn-admin-sm warn" onclick="resolveAdminReport(${rp.id}, 'delete_review')">리뷰삭제</button>
               <button class="btn-admin-sm danger" onclick="resolveAdminReport(${rp.id}, 'ban_author')">삭제+차단</button>
             </div>
-          ` : `<span style="font-size:11.5px; color:#94a3b8;">완료</span>`;
+          ` : `
+            <div style="font-size:11.5px; color:#334155;">
+              <span style="font-weight:800; color:#1d4ed8;">@${rp.resolvedBy || 'admin'}</span> 처리
+              ${rp.resolvedAt ? `<div style="font-size:10.5px; color:#94a3b8;">${rp.resolvedAt}</div>` : ''}
+            </div>
+          `;
           return `
             <tr>
               <td>#${rp.id}<div style="font-size:11px; color:#94a3b8;">${rp.createdAt}</div></td>
@@ -5034,8 +5046,13 @@
             ? `<span class="status-badge suspended">미확인</span>`
             : `<span class="status-badge active">확인완료</span>`;
           const btn = fb.status === 'pending'
-            ? `<button class="btn-admin-sm ok" onclick="resolveAdminFeedback(${fb.id})">확인완료</button>`
-            : `<span style="font-size:11.5px; color:#94a3b8;">완료</span>`;
+            ? `<button class="btn-admin-sm ok" onclick="resolveAdminFeedback(${fb.id})">해결완료</button>`
+            : `
+              <div style="font-size:11.5px; color:#334155;">
+                <span style="font-weight:800; color:#15803d;">@${fb.resolvedBy || 'admin'}</span> 해결
+                ${fb.resolvedAt ? `<div style="font-size:10.5px; color:#94a3b8;">${fb.resolvedAt}</div>` : ''}
+              </div>
+            `;
           const photosHtml = (fb.photos && fb.photos.length > 0)
             ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">${fb.photos.map(url => `<a href="${url}" target="_blank" title="원본 크게 보기"><img src="${url}" alt="제보 캡처" style="width:64px; height:64px; object-fit:cover; border-radius:6px; border:1px solid #cbd5e1;"></a>`).join('')}</div>`
             : '';
@@ -5071,42 +5088,77 @@
           </table>
         `;
       } else {
-        const rows = auditLogs.map(lg => `
-          <tr>
-            <td style="font-size:12px; color:#64748b; white-space:nowrap;">${lg.createdAt}</td>
-            <td style="font-weight:700;">@${lg.adminId}</td>
-            <td><span class="status-badge ${lg.action === 'UNMASK_PII' ? 'suspended' : (lg.action === 'UNBAN_USER' ? 'active' : 'banned')}">${lg.action}</span></td>
-            <td style="font-weight:700;">${lg.targetId}</td>
-            <td style="font-size:12.5px; color:#334155;">${lg.detail}</td>
-          </tr>
-        `).join('');
+        const actionMeta = {
+          RESOLVE_FEEDBACK: { label: '오류·제보 해결', cls: 'active' },
+          DELETE_REVIEW: { label: '리뷰 삭제', cls: 'banned' },
+          RESOLVE_REPORT: { label: '신고 리뷰 삭제', cls: 'banned' },
+          DISMISS_REPORT: { label: '신고 기각', cls: 'suspended' },
+          BAN_FROM_REPORT: { label: '신고 영구차단', cls: 'banned' },
+          BAN_USER: { label: '회원 영구차단', cls: 'banned' },
+          SUSPEND_USER: { label: '회원 일시정지', cls: 'suspended' },
+          UNBAN_USER: { label: '제재 해제', cls: 'active' },
+          UNMASK_PII: { label: '개인정보 열람', cls: 'suspended' }
+        };
+        const adminIdsInLogs = Array.from(new Set(['admin', 'admin1', ...auditLogs.map(lg => lg.adminId).filter(Boolean)]));
+        const filteredLogs = currentAdminAuditFilter === 'all'
+          ? auditLogs
+          : auditLogs.filter(lg => lg.adminId === currentAdminAuditFilter);
+
+        const filterBtns = `
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
+            <button class="btn-admin-sm ${currentAdminAuditFilter === 'all' ? 'ok' : ''}" onclick="setAdminAuditFilter('all')">전체 (${auditLogs.length})</button>
+            ${adminIdsInLogs.map(aid => {
+              const cnt = auditLogs.filter(lg => lg.adminId === aid).length;
+              return `<button class="btn-admin-sm ${currentAdminAuditFilter === aid ? 'ok' : ''}" onclick="setAdminAuditFilter('${aid}')">@${aid} (${cnt})</button>`;
+            }).join('')}
+          </div>
+        `;
+
+        const rows = filteredLogs.map(lg => {
+          const meta = actionMeta[lg.action] || { label: lg.action, cls: 'suspended' };
+          return `
+            <tr>
+              <td style="font-size:12px; color:#64748b; white-space:nowrap;">${lg.createdAt}</td>
+              <td style="font-weight:800; color:#1e40af;">@${lg.adminId}</td>
+              <td><span class="status-badge ${meta.cls}">${meta.label}</span></td>
+              <td style="font-weight:700;">${lg.targetId}</td>
+              <td style="font-size:12.5px; color:#334155;">${lg.detail}</td>
+            </tr>
+          `;
+        }).join('');
 
         tabBody = `
-          <div style="font-size:12.5px; color:#475569; margin-bottom:12px; background:#fef2f2; padding:10px 14px; border-radius:6px; border:1px solid #fecaca;">
-            <i class="fa-solid fa-clipboard-check" style="color:#dc2626;"></i>
-            관리자가 회원의 개인정보를 복호화 열람하거나 계정 제재·리뷰 삭제를 수행한 모든 이력이 위변조 방지를 위해 기록됩니다.
+          <div style="font-size:12.5px; color:#475569; margin-bottom:12px; background:#eff6ff; padding:10px 14px; border-radius:6px; border:1px solid #bfdbfe;">
+            <i class="fa-solid fa-share-nodes" style="color:#2563eb;"></i>
+            <strong>관리자 활동 공유 창:</strong> 각 관리자(<code>@admin</code>, <code>@admin1</code>)가 처리한 오류·제보 해결, 리뷰 삭제, 신고 처리, 회원 제재 및 개인정보 열람 내역이 실시간으로 공유됩니다.
           </div>
+          ${filterBtns}
           <table class="admin-table">
             <thead>
               <tr>
                 <th>일시</th>
-                <th>관리자</th>
+                <th>처리 관리자</th>
                 <th>작업 유형</th>
                 <th>대상</th>
                 <th>상세 내용</th>
               </tr>
             </thead>
-            <tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:30px;">아직 감사 로그가 없습니다.</td></tr>'}</tbody>
+            <tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:30px;">해당 조건의 활동 내역이 없습니다.</td></tr>'}</tbody>
           </table>
         `;
       }
 
       container.innerHTML = `
-        <div style="margin-bottom:16px;">
-          <h2 style="font-size:20px; font-weight:900; color:#0f172a; margin:0;">
-            <i class="fa-solid fa-shield-halved" style="color:#991b1b;"></i> 홍슐랭 관리자 보안 · 제재 센터
-          </h2>
-          <p style="font-size:13px; color:#64748b; margin:4px 0 0;">암호화된 회원 신상 관리, 이상 행동 유저 제재 및 보안 감사 로그를 통합 관리합니다.</p>
+        <div style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:8px;">
+          <div>
+            <h2 style="font-size:20px; font-weight:900; color:#0f172a; margin:0;">
+              <i class="fa-solid fa-shield-halved" style="color:#991b1b;"></i> 홍슐랭 관리자 보안 · 제재 센터
+            </h2>
+            <p style="font-size:13px; color:#64748b; margin:4px 0 0;">암호화된 회원 신상 관리, 이상 행동 유저 제재 및 관리자 활동 공유 로그를 통합 관리합니다.</p>
+          </div>
+          <div style="font-size:12.5px; font-weight:700; color:#1e40af; background:#eff6ff; padding:6px 12px; border-radius:999px; border:1px solid #bfdbfe;">
+            현재 접속 관리자: @${(typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : 'admin'}
+          </div>
         </div>
 
         <div class="admin-summary-grid">
@@ -5127,7 +5179,7 @@
             <div class="admin-stat-val" style="color:#dc2626;">${summary.pendingReports || 0}건</div>
           </div>
           <div class="admin-stat-box">
-            <div class="admin-stat-label">보안 감사 로그</div>
+            <div class="admin-stat-label">관리자 공유 로그</div>
             <div class="admin-stat-val" style="color:#b45309;">${summary.totalAuditLogs}건</div>
           </div>
         </div>
@@ -5146,7 +5198,7 @@
             <i class="fa-solid fa-comment-slash"></i> 리뷰 모니터링 (${rList.length})
           </button>
           <button class="mypage-tab ${currentAdminTab === 'audit' ? 'active' : ''}" onclick="switchAdminTab('audit')">
-            <i class="fa-solid fa-file-shield"></i> 보안 감사 로그 (${auditLogs.length})
+            <i class="fa-solid fa-share-nodes"></i> 관리자 활동 공유 (${auditLogs.length})
           </button>
         </div>
 
