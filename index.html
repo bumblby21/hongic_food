@@ -2670,10 +2670,12 @@
 
       /* Detail Page & MyPage Mobile Fixes */
       .nav-back-row {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 6px;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 10px;
         margin-bottom: 12px;
+        padding-bottom: 10px;
       }
       .btn-back-nav {
         white-space: nowrap;
@@ -2838,36 +2840,110 @@
       background: #0f172a;
       color: #ffffff;
     }
+    .reviewer-link-btn {
+      background: none;
+      border: none;
+      padding: 2px 6px 2px 0;
+      margin: 0;
+      font: inherit;
+      font-weight: 800;
+      color: #0f172a;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+      border-radius: 6px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .reviewer-link-btn:hover {
+      color: #2563eb;
+      text-decoration: underline;
+    }
+    .review-react-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .btn-review-react {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-review-react:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+    .btn-review-react.like.active {
+      background: #eff6ff;
+      border-color: #93c5fd;
+      color: #1d4ed8;
+    }
+    .btn-review-react.dislike.active {
+      background: #fef2f2;
+      border-color: #fca5a5;
+      color: #dc2626;
+    }
+    .reviewer-profile-hero {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .reviewer-review-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+    }
     .lightbox-overlay {
       display: none;
       position: fixed;
       inset: 0;
       z-index: 2200;
-      background: rgba(15, 23, 42, 0.92);
+      background: rgba(15, 23, 42, 0.94);
       align-items: center;
       justify-content: center;
       flex-direction: column;
-      padding: 20px;
+      padding: calc(env(safe-area-inset-top, 0px) + 56px) 16px calc(env(safe-area-inset-bottom, 0px) + 20px);
     }
     .lightbox-overlay.open {
       display: flex;
     }
     .lightbox-img {
       max-width: 94vw;
-      max-height: 82vh;
+      max-height: 78vh;
       object-fit: contain;
       border-radius: 8px;
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
     }
     .lightbox-close {
       position: fixed;
-      top: 16px;
-      right: 18px;
-      width: 40px;
-      height: 40px;
+      top: calc(env(safe-area-inset-top, 0px) + 14px);
+      right: 16px;
+      z-index: 2210;
+      width: 42px;
+      height: 42px;
       border-radius: 50%;
-      border: none;
-      background: rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.38);
+      background: rgba(15, 23, 42, 0.78);
       color: #ffffff;
       font-size: 24px;
       line-height: 1;
@@ -2875,6 +2951,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
     }
     .lightbox-caption {
       margin-top: 12px;
@@ -3541,8 +3619,8 @@
     <!-- PAGE VIEW 2: Dedicated Full Restaurant Detail Page Screen -->
     <div id="view-restaurant-detail">
       <div class="nav-back-row">
-        <button class="btn-back-nav" onclick="navigateToList()" style="display:none;">
-          <i class="fa-solid fa-arrow-left"></i> 랭킹 목록으로 돌아가기
+        <button type="button" class="btn-back-nav" onclick="navigateBack()">
+          <i class="fa-solid fa-arrow-left"></i> 뒤로가기
         </button>
         <div class="detail-breadcrumb" id="detail-breadcrumb"></div>
       </div>
@@ -3558,8 +3636,8 @@
     <!-- PAGE VIEW 3: My Page (내 미식 성향 및 리뷰/북마크 관리) -->
     <div id="view-mypage">
       <div class="nav-back-row">
-        <button class="btn-back-nav" onclick="navigateToList()" style="display:none;">
-          <i class="fa-solid fa-arrow-left"></i> 랭킹 목록으로 돌아가기
+        <button type="button" class="btn-back-nav" onclick="navigateBack()">
+          <i class="fa-solid fa-arrow-left"></i> 뒤로가기
         </button>
         <div class="detail-breadcrumb">홈 &gt; <strong>마이페이지</strong></div>
       </div>
@@ -3571,8 +3649,8 @@
     <!-- PAGE VIEW 4: Login / Register (전용 로그인 / 회원가입 페이지) -->
     <div id="view-auth">
       <div class="nav-back-row">
-        <button class="btn-back-nav" onclick="navigateToList()" style="display:none;">
-          <i class="fa-solid fa-arrow-left"></i> 랭킹 목록으로 돌아가기
+        <button type="button" class="btn-back-nav" onclick="navigateBack()">
+          <i class="fa-solid fa-arrow-left"></i> 뒤로가기
         </button>
         <div class="detail-breadcrumb">홈 &gt; <strong>로그인 / 회원가입</strong></div>
       </div>
@@ -3658,14 +3736,25 @@
     <!-- PAGE VIEW 5: Admin Page (관리자 전용 회원 관리 / 제재 / 보안 감사 로그) -->
     <div id="view-admin">
       <div class="nav-back-row">
-        <button class="btn-back-nav" onclick="navigateToList()" style="display:none;">
-          <i class="fa-solid fa-arrow-left"></i> 랭킹 목록으로 돌아가기
+        <button type="button" class="btn-back-nav" onclick="navigateBack()">
+          <i class="fa-solid fa-arrow-left"></i> 뒤로가기
         </button>
         <div class="detail-breadcrumb">홈 &gt; <strong style="color:#991b1b;">관리자 보안·제재 센터</strong></div>
       </div>
       <div id="admin-content">
         <!-- Rendered by renderAdminPage() -->
       </div>
+    </div>
+
+    <!-- PAGE VIEW 6: Reviewer Public Profile & All Reviews -->
+    <div id="view-reviewer-profile" style="display:none;">
+      <div class="nav-back-row">
+        <button type="button" class="btn-back-nav" onclick="navigateBackFromReviewer()">
+          <i class="fa-solid fa-arrow-left"></i> 뒤로가기
+        </button>
+        <div class="detail-breadcrumb" id="reviewer-profile-breadcrumb">홈 &gt; <strong>작성자 리뷰</strong></div>
+      </div>
+      <div id="reviewer-profile-content"></div>
     </div>
 
     <div style="margin-top:36px; padding:16px 0 8px; border-top:1px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:12px; color:#94a3b8;">
@@ -3746,9 +3835,10 @@
     </div>
   </div>
 
+
   <!-- Photo Lightbox Viewer -->
   <div class="lightbox-overlay" id="modal-lightbox" onclick="if(event.target===this) closeLightbox()">
-    <button type="button" class="lightbox-close" onclick="closeLightbox()" title="닫기">&times;</button>
+    <button type="button" class="lightbox-close" onclick="closeLightbox()" title="닫기" aria-label="닫기">&times;</button>
     <img id="lightbox-img" class="lightbox-img" src="" alt="확대 사진">
     <div id="lightbox-caption" class="lightbox-caption"></div>
   </div>
@@ -4435,6 +4525,7 @@
       if (_editRevEl) _editRevEl.style.display = 'none';
       document.getElementById('view-mypage').style.display = 'none';
       document.getElementById('view-admin').style.display = 'none';
+      const _revProfEl = document.getElementById('view-reviewer-profile'); if (_revProfEl) _revProfEl.style.display = 'none';
       const mapEl = document.getElementById('view-map-explore');
       if (mapEl) mapEl.style.display = 'none';
       if (typeof syncBodyScrollLock === 'function') syncBodyScrollLock();
@@ -4725,6 +4816,7 @@
       if (_editRevEl) _editRevEl.style.display = 'none';
       document.getElementById('view-auth').style.display = 'none';
       document.getElementById('view-admin').style.display = 'none';
+      const _revProfEl = document.getElementById('view-reviewer-profile'); if (_revProfEl) _revProfEl.style.display = 'none';
       const mapEl = document.getElementById('view-map-explore');
       if (mapEl) mapEl.style.display = 'none';
       if (typeof syncBodyScrollLock === 'function') syncBodyScrollLock();
@@ -4934,6 +5026,7 @@
       const mapEl = document.getElementById('view-map-explore');
       if (mapEl) mapEl.style.display = 'none';
       if (typeof syncBodyScrollLock === 'function') syncBodyScrollLock();
+      const _revProfEl = document.getElementById('view-reviewer-profile'); if (_revProfEl) _revProfEl.style.display = 'none';
       document.getElementById('view-admin').style.display = 'block';
       window.scrollTo({ top: 0, behavior: 'smooth' });
       renderAdminPage();
@@ -5134,7 +5227,7 @@
               </div>
             `;
           const photosHtml = (fb.photos && fb.photos.length > 0)
-            ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">${fb.photos.map(url => `<a href="${url}" target="_blank" title="원본 크게 보기"><img src="${url}" alt="제보 캡처" style="width:64px; height:64px; object-fit:cover; border-radius:6px; border:1px solid #cbd5e1;"></a>`).join('')}</div>`
+            ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">${fb.photos.map(url => `<img src="${url}" alt="제보 캡처" onclick="openLightbox('${url}', '제보 첨부 사진')" style="width:64px; height:64px; object-fit:cover; border-radius:6px; border:1px solid #cbd5e1; cursor:zoom-in;" title="크게 보기">`).join('')}</div>`
             : '';
           return `
             <tr>
@@ -5477,6 +5570,200 @@
       }
     }
 
+    function renderReviewReactionBar(rev) {
+      const likes = Number(rev.likeCount || 0);
+      const dislikes = Number(rev.dislikeCount || 0);
+      const my = rev.myReaction || '';
+      return `
+        <div class="review-react-bar" data-review-id="${rev.id}">
+          <button type="button" class="btn-review-react like ${my === 'like' ? 'active' : ''}" onclick="toggleReviewReaction(${rev.id}, 'like')">
+            <i class="fa-${my === 'like' ? 'solid' : 'regular'} fa-thumbs-up"></i>
+            <span>좋아요</span>
+            <span class="react-cnt">${likes}</span>
+          </button>
+          <button type="button" class="btn-review-react dislike ${my === 'dislike' ? 'active' : ''}" onclick="toggleReviewReaction(${rev.id}, 'dislike')">
+            <i class="fa-${my === 'dislike' ? 'solid' : 'regular'} fa-thumbs-down"></i>
+            <span>싫어요</span>
+            <span class="react-cnt">${dislikes}</span>
+          </button>
+        </div>
+      `;
+    }
+
+    async function toggleReviewReaction(reviewId, reaction) {
+      if (!loggedInUser) {
+        alert('좋아요/싫어요를 남기려면 로그인이 필요합니다.');
+        openAuthModal('login');
+        return;
+      }
+      try {
+        const res = await fetch(`/api/reviews/${reviewId}/react`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reaction })
+        });
+        const json = await res.json();
+        if (!json.success || !json.data) {
+          alert(json.error || '처리하지 못했습니다.');
+          return;
+        }
+        const { likeCount, dislikeCount, myReaction } = json.data;
+        if (currentRestaurantData && Array.isArray(currentRestaurantData.reviews)) {
+          const target = currentRestaurantData.reviews.find(r => r.id === reviewId);
+          if (target) {
+            target.likeCount = likeCount;
+            target.dislikeCount = dislikeCount;
+            target.myReaction = myReaction;
+          }
+        }
+        document.querySelectorAll(`.review-react-bar[data-review-id="${reviewId}"]`).forEach(bar => {
+          bar.outerHTML = renderReviewReactionBar({ id: reviewId, likeCount, dislikeCount, myReaction });
+        });
+      } catch (e) {
+        alert('서버 통신 오류가 발생했습니다.');
+      }
+    }
+
+    let reviewerReturnDetailId = null;
+
+    function closeReviewerModal() {
+      const el = document.getElementById('view-reviewer-profile');
+      if (el) el.style.display = 'none';
+    }
+
+    function navigateBackFromReviewer() {
+      if (reviewerReturnDetailId) {
+        const rid = reviewerReturnDetailId;
+        reviewerReturnDetailId = null;
+        navigateToDetail(rid, true, 'reviews');
+      } else {
+        navigateBack();
+      }
+    }
+
+    function openRestaurantFromReviewerModal(restaurantId, reviewId) {
+      navigateToDetail(restaurantId, true, 'reviews', reviewId);
+    }
+
+    async function openReviewerModal(userId, fallbackName = '', pushState = true) {
+      const detailEl = document.getElementById('view-restaurant-detail');
+      if (detailEl && detailEl.style.display === 'block' && currentDetailRestaurantId) {
+        reviewerReturnDetailId = currentDetailRestaurantId;
+      }
+
+      if (pushState) {
+        history.pushState({ page: 'reviewer', userId: userId, fallbackName: fallbackName }, '', `#reviewer/${encodeURIComponent(userId)}`);
+      }
+
+      isMapOpen = false;
+      document.getElementById('view-ranking-list').style.display = 'none';
+      if (detailEl) detailEl.style.display = 'none';
+      const _editRevEl = document.getElementById('view-edit-review');
+      if (_editRevEl) _editRevEl.style.display = 'none';
+      document.getElementById('view-mypage').style.display = 'none';
+      document.getElementById('view-auth').style.display = 'none';
+      document.getElementById('view-admin').style.display = 'none';
+      const _revProfEl = document.getElementById('view-reviewer-profile'); if (_revProfEl) _revProfEl.style.display = 'none';
+      const mapEl = document.getElementById('view-map-explore');
+      if (mapEl) mapEl.style.display = 'none';
+      if (typeof syncBodyScrollLock === 'function') syncBodyScrollLock();
+
+      const pageEl = document.getElementById('view-reviewer-profile');
+      const bcEl = document.getElementById('reviewer-profile-breadcrumb');
+      const bodyEl = document.getElementById('reviewer-profile-content');
+      if (!pageEl || !bodyEl) return;
+
+      pageEl.style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      if (bcEl) bcEl.innerHTML = `홈 &gt; 작성자 리뷰 &gt; <strong>${fallbackName || userId}</strong>`;
+      bodyEl.innerHTML = `<div class="reviewer-profile-hero" style="justify-content:center; padding:44px 16px; color:#64748b; font-size:13.5px;"><i class="fa-solid fa-spinner fa-spin"></i> ${fallbackName || userId}님의 전체 리뷰를 불러오는 중...</div>`;
+
+      try {
+        const res = await fetch(`/api/users/${encodeURIComponent(userId)}/reviews`);
+        const json = await res.json();
+        if (!json.success || !json.data) {
+          bodyEl.innerHTML = `<div class="reviewer-profile-hero" style="justify-content:center; padding:36px 16px; color:#dc2626; font-size:13.5px;">${json.error || '리뷰를 불러오지 못했습니다.'}</div>`;
+          return;
+        }
+        const { user, reviewCount, avgScore, reviews } = json.data;
+        if (bcEl) bcEl.innerHTML = `홈 &gt; 작성자 리뷰 &gt; <strong>${user.name}</strong>`;
+
+        const heroHtml = `
+          <div class="reviewer-profile-hero">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="width:44px; height:44px; border-radius:50%; background:#f1f5f9; display:flex; align-items:center; justify-content:center; color:#475569; font-size:22px;">
+                <i class="fa-solid fa-user"></i>
+              </div>
+              <div>
+                <div style="font-size:18px; font-weight:900; color:#0f172a;">${user.name}</div>
+                <div style="font-size:12.5px; color:#64748b; margin-top:2px;">작성한 전체 맛집 리뷰</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:16px; align-items:center;">
+              <div style="text-align:center;">
+                <div style="font-size:11px; color:#64748b;">작성 리뷰</div>
+                <div style="font-size:17px; font-weight:900; color:#0f172a;">${reviewCount}건</div>
+              </div>
+              <div style="width:1px; height:28px; background:#e2e8f0;"></div>
+              <div style="text-align:center;">
+                <div style="font-size:11px; color:#64748b;">평균 평점</div>
+                <div style="font-size:17px; font-weight:900; color:#d97706;">${reviewCount > 0 ? '★ ' + Number(avgScore).toFixed(2) : '-'}</div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        if (!reviews || reviews.length === 0) {
+          bodyEl.innerHTML = heroHtml + `<div class="reviewer-review-card" style="text-align:center; padding:40px 12px; color:#94a3b8; font-size:13px;">아직 등록된 리뷰가 없습니다.</div>`;
+          return;
+        }
+
+        const cardsHtml = reviews.map(rv => {
+          const c = rv.criteria || {};
+          const critHtml = (c.taste || c.service || c.vibe || c.drinks || c.value) ? `
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin:6px 0; font-size:11.5px;">
+              ${c.taste ? `<span style="background:#fef3c7; color:#92400e; padding:1px 6px; border-radius:3px;">맛 ${Number(c.taste).toFixed(1)}</span>` : ''}
+              ${c.service ? `<span style="background:#f1f5f9; color:#475569; padding:1px 6px; border-radius:3px;">서비스 ${Number(c.service).toFixed(1)}</span>` : ''}
+              ${c.vibe ? `<span style="background:#f3e8ff; color:#6b21a8; padding:1px 6px; border-radius:3px;">분위기 ${Number(c.vibe).toFixed(1)}</span>` : ''}
+              ${c.drinks ? `<span style="background:#eff6ff; color:#1d4ed8; padding:1px 6px; border-radius:3px;">술·음료 ${Number(c.drinks).toFixed(1)}</span>` : ''}
+              ${c.value ? `<span style="background:#ecfdf5; color:#065f46; padding:1px 6px; border-radius:3px;">가성비 ${Number(c.value).toFixed(1)}</span>` : ''}
+            </div>
+          ` : '';
+          const photosHtml = (rv.photos && rv.photos.length > 0) ? `
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+              ${rv.photos.map(p => `<img src="${p}" alt="리뷰 사진" onclick="openLightbox('${p}', '${(rv.restaurantName || '').replace(/'/g, "\\'")}')" style="width:76px; height:76px; object-fit:cover; border-radius:6px; border:1px solid #e2e8f0; cursor:zoom-in;">`).join('')}
+            </div>
+          ` : '';
+          const receiptTag = rv.receipt ? `<span style="font-size:10.5px; font-weight:700; color:#15803d; background:#dcfce7; padding:1px 6px; border-radius:4px;">영수증</span>` : '';
+          return `
+            <div class="reviewer-review-card">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;">
+                <button type="button" onclick="openRestaurantFromReviewerModal(${rv.restaurantId}, ${rv.id})" style="background:none; border:none; padding:0; text-align:left; cursor:pointer; display:flex; align-items:center; gap:10px; min-width:0; flex:1;">
+                  ${rv.restaurantThumb ? `<img src="${rv.restaurantThumb}" referrerpolicy="no-referrer" alt="${rv.restaurantName}" style="width:44px; height:44px; object-fit:cover; border-radius:8px; flex-shrink:0;">` : ''}
+                  <div style="min-width:0;">
+                    <div style="font-size:15px; font-weight:800; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${rv.restaurantName} <i class="fa-solid fa-chevron-right" style="font-size:11px; color:#94a3b8;"></i></div>
+                    <div style="font-size:11.5px; color:#64748b;">${rv.restaurantArea || ''} · ${rv.restaurantCategory || ''}</div>
+                  </div>
+                </button>
+                <div style="text-align:right; flex-shrink:0;">
+                  <div style="font-size:14px; font-weight:900; color:#d97706;">★ ${Number(rv.score).toFixed(1)}</div>
+                  <div style="font-size:11px; color:#94a3b8;">${rv.date || ''} ${receiptTag}</div>
+                </div>
+              </div>
+              ${critHtml}
+              <div style="font-size:13.5px; color:#334155; line-height:1.55; white-space:pre-wrap;">${rv.comment || ''}</div>
+              ${photosHtml}
+              ${renderReviewReactionBar(rv)}
+            </div>
+          `;
+        }).join('');
+
+        bodyEl.innerHTML = heroHtml + cardsHtml;
+      } catch (e) {
+        bodyEl.innerHTML = `<div class="reviewer-profile-hero" style="justify-content:center; padding:36px 16px; color:#dc2626; font-size:13.5px;">서버 통신 오류가 발생했습니다.</div>`;
+      }
+    }
     function openLightbox(url, caption = '') {
       const ov = document.getElementById('modal-lightbox');
       const img = document.getElementById('lightbox-img');
@@ -5677,6 +5964,7 @@
       document.getElementById('view-mypage').style.display = 'none';
       document.getElementById('view-auth').style.display = 'none';
       document.getElementById('view-admin').style.display = 'none';
+      const _revProfEl = document.getElementById('view-reviewer-profile'); if (_revProfEl) _revProfEl.style.display = 'none';
 
       const editView = document.getElementById('view-edit-review');
       editView.innerHTML = `
@@ -6571,7 +6859,23 @@
       document.body.classList.remove('overlay-scroll-locked');
     }
 
+    let lastMainView = 'list';
+
+    function navigateBack() {
+      const lb = document.getElementById('modal-lightbox');
+      if (lb && lb.classList.contains('open')) {
+        closeLightbox();
+        return;
+      }
+      if (lastMainView === 'map') {
+        navigateToMap();
+      } else {
+        navigateToList();
+      }
+    }
+
     function navigateToMap() {
+      lastMainView = 'map';
       syncHeaderHeight();
       const addEl = document.getElementById('modal-add-restaurant');
       if (addEl) addEl.classList.remove('open');
@@ -6583,6 +6887,7 @@
       document.getElementById('view-mypage').style.display = 'none';
       document.getElementById('view-auth').style.display = 'none';
       document.getElementById('view-admin').style.display = 'none';
+      const _revProfEl = document.getElementById('view-reviewer-profile'); if (_revProfEl) _revProfEl.style.display = 'none';
       document.getElementById('view-map-explore').style.display = 'block';
       syncBodyScrollLock();
       setMobileNavActive('map');
@@ -7009,6 +7314,7 @@
       document.getElementById('view-mypage').style.display = 'none';
       document.getElementById('view-auth').style.display = 'none';
       document.getElementById('view-admin').style.display = 'none';
+      const _revProfEl = document.getElementById('view-reviewer-profile'); if (_revProfEl) _revProfEl.style.display = 'none';
       const mapEl = document.getElementById('view-map-explore');
       if (mapEl) mapEl.style.display = 'none';
       if (typeof syncBodyScrollLock === 'function') syncBodyScrollLock();
@@ -7058,6 +7364,7 @@
     }
 
     function navigateToList(pushState = true) {
+      lastMainView = 'list';
       if (pushState) {
         history.pushState({ page: 'list' }, '', window.location.pathname);
       }
@@ -7071,6 +7378,7 @@
       document.getElementById('view-mypage').style.display = 'none';
       document.getElementById('view-auth').style.display = 'none';
       document.getElementById('view-admin').style.display = 'none';
+      const _revProfEl = document.getElementById('view-reviewer-profile'); if (_revProfEl) _revProfEl.style.display = 'none';
       const mapEl = document.getElementById('view-map-explore');
       if (mapEl) mapEl.style.display = 'none';
       if (typeof syncBodyScrollLock === 'function') syncBodyScrollLock();
@@ -7083,13 +7391,19 @@
 
     // Browser back/forward button support
     window.addEventListener('popstate', (e) => {
+      closeLightbox();
       if (e.state && e.state.page === 'detail' && e.state.id) {
         navigateToDetail(e.state.id, false);
+      } else if (e.state && e.state.page === 'reviewer' && e.state.userId) {
+        openReviewerModal(e.state.userId, e.state.fallbackName || '', false);
       } else {
         const hash = window.location.hash;
         if (hash.startsWith('#detail/')) {
           const id = parseInt(hash.replace('#detail/', ''), 10);
           navigateToDetail(id, false);
+        } else if (hash.startsWith('#reviewer/')) {
+          const uid = decodeURIComponent(hash.replace('#reviewer/', ''));
+          openReviewerModal(uid, '', false);
         } else {
           navigateToList(false);
         }
@@ -7281,7 +7595,7 @@
                   <div class="tabelog-review-row">
                     <div class="review-user-row">
                       <span class="review-user-name">
-                        <span style="white-space:nowrap;"><i class="fa-solid fa-user-circle" style="color:#64748b; font-size:15px;"></i> ${rev.userName}</span>
+                        <button type="button" class="reviewer-link-btn" onclick="openReviewerModal('${rev.userId}', '${(rev.userName || '').replace(/'/g, "\\'")}')" title="이 작성자의 전체 리뷰 보기"><i class="fa-solid fa-user-circle" style="color:#64748b; font-size:15px;"></i> ${rev.userName} <i class="fa-solid fa-chevron-right" style="font-size:10px; color:#94a3b8;"></i></button>
                         ${(isMyReview(rev) || isAdminViewer()) ? `<span class="user-avg-hint">(평소 평균 ${rev.userAvg.toFixed(1)}점)</span>` : ''}
                         ${renderReceiptBadge(rev)}
                         <span class="review-date">${rev.date || '최근 방문'}</span>
@@ -7312,6 +7626,7 @@
                         `).join('')}
                       </div>
                     ` : ''}
+                    ${renderReviewReactionBar(rev)}
                   </div>
                 `;
               }).join('')}
@@ -7637,7 +7952,7 @@
                   <div class="tabelog-review-row" id="detail-review-${rev.id}" style="scroll-margin-top:calc(var(--header-h, 70px) + 18px);">
                     <div class="review-user-row">
                       <span class="review-user-name">
-                        <span style="white-space:nowrap;"><i class="fa-solid fa-user-circle" style="color:#64748b; font-size:16px;"></i> ${rev.userName}</span>
+                        <button type="button" class="reviewer-link-btn" onclick="openReviewerModal('${rev.userId}', '${(rev.userName || '').replace(/'/g, "\\'")}')" title="이 작성자의 전체 리뷰 보기"><i class="fa-solid fa-user-circle" style="color:#64748b; font-size:16px;"></i> ${rev.userName} <i class="fa-solid fa-chevron-right" style="font-size:10px; color:#94a3b8;"></i></button>
                         ${(isMyReview(rev) || isAdminViewer()) ? `<span class="user-avg-hint">(평소 평균 ${rev.userAvg.toFixed(1)}점)</span>` : ''}
                         ${renderReceiptBadge(rev)}
                         <span class="review-date">${rev.date || '최근 방문'}</span>
@@ -7668,6 +7983,7 @@
                         `).join('')}
                       </div>
                     ` : ''}
+                    ${renderReviewReactionBar(rev)}
                   </div>
                 `;
               }).join('')}

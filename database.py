@@ -291,6 +291,21 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
+    # 8. Review Reactions Table (리뷰 좋아요 / 싫어요)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS review_reactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            review_id INTEGER NOT NULL,
+            user_id TEXT NOT NULL,
+            reaction TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(review_id, user_id),
+            FOREIGN KEY (review_id) REFERENCES reviews (id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_review_reactions_review_id ON review_reactions(review_id)")
+
     # Ensure default admin accounts exist (admin & admin1)
     default_admins = [
         ("admin", "총괄 관리자", DEFAULT_ADMIN_PASSWORD, "HONGCHELIN_ADMIN_PASSWORD", "admin@hongchelin.local", "010-0000-0000"),
@@ -595,7 +610,89 @@ def get_all_restaurants():
     return result
 
 
-def get_restaurant_by_id(restaurant_id):
+def _get_reactions_map(cursor, review_ids, viewer_user_id=None):
+    if not review_ids:
+        return {}
+    placeholders = ",".join("?" for _ in review_ids)
+    cursor.execute(f"""
+        SELECT review_id,
+               SUM(CASE WHEN reaction = 'like' THEN 1 ELSE 0 END) AS likes,
+               SUM(CASE WHEN reaction = 'dislike' THEN 1 ELSE 0 END) AS dislikes
+        FROM review_reactions
+        WHERE review_id IN ({placeholders})
+        GROUP BY review_id
+    """, review_ids)
+    res = {}
+    for row in cursor.fetchall():
+        res[row["review_id"]] = {
+            "likeCount": int(row["likes"] or 0),
+            "dislikeCount": int(row["dislikes"] or 0),
+            "myReaction": ""
+        }
+    if viewer_user_id:
+        cursor.execute(f"""
+            SELECT review_id, reaction
+            FROM review_reactions
+            WHERE user_id = ? AND review_id IN ({placeholders})
+        """, [viewer_user_id] + list(review_ids))
+        for row in cursor.fetchall():
+            rid = row["review_id"]
+            if rid not in res:
+                res[rid] = {"likeCount": 0, "dislikeCount": 0, "myReaction": ""}
+            res[rid]["myReaction"] = row["reaction"] or ""
+    return res
+
+
+def toggle_review_reaction(review_id, user_id, reaction):
+    if reaction not in ("like", "dislike"):
+        return None, "유효하지 않은 반응 유형입니다."
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM reviews WHERE id = ?", (review_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return None, "해당 리뷰를 찾을 수 없습니다."
+
+    cursor.execute(
+        "SELECT id, reaction FROM review_reactions WHERE review_id = ? AND user_id = ?",
+        (review_id, user_id)
+    )
+    existing = cursor.fetchone()
+    if existing:
+        if existing["reaction"] == reaction:
+            cursor.execute("DELETE FROM review_reactions WHERE id = ?", (existing["id"],))
+            my_reaction = ""
+        else:
+            cursor.execute(
+                "UPDATE review_reactions SET reaction = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (reaction, existing["id"])
+            )
+            my_reaction = reaction
+    else:
+        cursor.execute(
+            "INSERT INTO review_reactions (review_id, user_id, reaction) VALUES (?, ?, ?)",
+            (review_id, user_id, reaction)
+        )
+        my_reaction = reaction
+
+    conn.commit()
+    cursor.execute("""
+        SELECT SUM(CASE WHEN reaction = 'like' THEN 1 ELSE 0 END) AS likes,
+               SUM(CASE WHEN reaction = 'dislike' THEN 1 ELSE 0 END) AS dislikes
+        FROM review_reactions
+        WHERE review_id = ?
+    """, (review_id,))
+    cnt = cursor.fetchone()
+    conn.close()
+    return {
+        "reviewId": review_id,
+        "likeCount": int((cnt["likes"] if cnt else 0) or 0),
+        "dislikeCount": int((cnt["dislikes"] if cnt else 0) or 0),
+        "myReaction": my_reaction
+    }, None
+
+
+def get_restaurant_by_id(restaurant_id, viewer_user_id=None):
     conn = get_db()
     cursor = conn.cursor()
 
@@ -612,6 +709,7 @@ def get_restaurant_by_id(restaurant_id):
         ORDER BY id DESC
     """, (restaurant_id,))
     review_rows = cursor.fetchall()
+    reactions_map = _get_reactions_map(cursor, [r["id"] for r in review_rows], viewer_user_id)
 
     reviews = []
     deltas = []
@@ -660,6 +758,10 @@ def get_restaurant_by_id(restaurant_id):
             "receipt": bool(rev["receipt"]),
             "receiptPhoto": (rev["receipt_photo"] if "receipt_photo" in rev.keys() and rev["receipt_photo"] else ""),
             "photos": json.loads(rev["photos"]),
+            "criteria": crit,
+            "likeCount": reactions_map.get(rev["id"], {}).get("likeCount", 0),
+            "dislikeCount": reactions_map.get(rev["id"], {}).get("dislikeCount", 0),
+            "myReaction": reactions_map.get(rev["id"], {}).get("myReaction", ""),
             "criteria": crit
         })
 
@@ -877,7 +979,7 @@ def change_user_password(user_id, current_password, new_password):
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, password_hash, role FROM users WHERE id = ?", (user_id,))
+    cursor.execute("SELECT id, name, password_hash, role FROM users WHERE id = ?", (user_id,))
     row = cursor.fetchone()
     if not row:
         conn.close()
@@ -943,7 +1045,7 @@ def change_user_password(user_id, current_password, new_password):
 
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, password_hash, role FROM users WHERE id = ?", (user_id,))
+    cursor.execute("SELECT id, name, password_hash, role FROM users WHERE id = ?", (user_id,))
     row = cursor.fetchone()
     if not row:
         conn.close()
@@ -1051,7 +1153,7 @@ def delete_user_account(user_id, password, upload_dir=None):
     """Permanently delete a user's account, all their reviews/bookmarks/feedbacks/reports, and uploaded files."""
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, password_hash, role FROM users WHERE id = ?", (user_id,))
+    cursor.execute("SELECT id, name, password_hash, role FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
     if not user:
         conn.close()
@@ -1066,7 +1168,9 @@ def delete_user_account(user_id, password, upload_dir=None):
     # Collect uploaded file paths from reviews and feedbacks before deleting rows
     upload_urls = []
     cursor.execute("SELECT photos, receipt_photo FROM reviews WHERE user_id = ?", (user_id,))
-    for row in cursor.fetchall():
+    user_reviews = cursor.fetchall()
+    deleted_review_count = len(user_reviews)
+    for row in user_reviews:
         if row["receipt_photo"]:
             upload_urls.append(row["receipt_photo"])
         try:
@@ -1090,10 +1194,21 @@ def delete_user_account(user_id, password, upload_dir=None):
         "DELETE FROM reports WHERE reporter_id = ? OR review_id IN (SELECT id FROM reviews WHERE user_id = ?)",
         (user_id, user_id),
     )
+    cursor.execute(
+        "DELETE FROM review_reactions WHERE user_id = ? OR review_id IN (SELECT id FROM reviews WHERE user_id = ?)",
+        (user_id, user_id),
+    )
     cursor.execute("DELETE FROM reviews WHERE user_id = ?", (user_id,))
     cursor.execute("DELETE FROM bookmarks WHERE user_id = ?", (user_id,))
     cursor.execute("DELETE FROM feedbacks WHERE user_id = ?", (user_id,))
     cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    log_admin_action(
+        conn,
+        "SYSTEM",
+        "USER_WITHDRAW",
+        user_id,
+        f"회원 자진 탈퇴 (닉네임: {user['name']} / 삭제된 리뷰: {deleted_review_count}건)"
+    )
     conn.commit()
     conn.close()
 
@@ -1139,6 +1254,85 @@ def toggle_bookmark(user_id, restaurant_id):
     ids = [r["restaurant_id"] for r in cursor.fetchall()]
     conn.close()
     return bookmarked, ids
+
+
+def get_public_user_reviews(user_id, viewer_user_id=None):
+    """
+    특정 작성자의 공개 리뷰 목록 반환 (개인정보 및 delta/가중치 제외)
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, name FROM users WHERE id = ?", (user_id,))
+    u_row = cursor.fetchone()
+
+    cursor.execute("""
+        SELECT r.id, r.restaurant_id, r.user_name, r.score, r.comment, r.date,
+               r.receipt, r.photos, r.criteria,
+               rest.name AS restaurant_name, rest.area AS restaurant_area,
+               rest.category AS restaurant_category, rest.photos AS restaurant_photos
+        FROM reviews r
+        JOIN restaurants rest ON r.restaurant_id = rest.id
+        WHERE r.user_id = ?
+        ORDER BY r.id DESC
+    """, (user_id,))
+    rev_rows = cursor.fetchall()
+    reactions_map = _get_reactions_map(cursor, [r["id"] for r in rev_rows], viewer_user_id)
+    conn.close()
+
+    if not u_row and not rev_rows:
+        return None
+
+    display_name = u_row["name"] if u_row else (rev_rows[0]["user_name"] if rev_rows else user_id)
+    reviews = []
+    score_sum = 0.0
+
+    for rv in rev_rows:
+        sc = float(rv["score"])
+        score_sum += sc
+        try:
+            rest_photos = json.loads(rv["restaurant_photos"]) if rv["restaurant_photos"] else []
+        except Exception:
+            rest_photos = []
+        try:
+            rev_photos = json.loads(rv["photos"]) if rv["photos"] else []
+        except Exception:
+            rev_photos = []
+        try:
+            crit = json.loads(rv["criteria"]) if rv["criteria"] else {}
+        except Exception:
+            crit = {}
+
+        reviews.append({
+            "id": rv["id"],
+            "restaurantId": rv["restaurant_id"],
+            "restaurantName": rv["restaurant_name"],
+            "restaurantArea": rv["restaurant_area"],
+            "restaurantCategory": rv["restaurant_category"],
+            "restaurantThumb": rest_photos[0] if rest_photos else "",
+            "score": sc,
+            "comment": rv["comment"],
+            "date": rv["date"],
+            "receipt": bool(rv["receipt"]),
+            "photos": rev_photos if isinstance(rev_photos, list) else [],
+            "criteria": crit if isinstance(crit, dict) else {},
+            "likeCount": reactions_map.get(rv["id"], {}).get("likeCount", 0),
+            "dislikeCount": reactions_map.get(rv["id"], {}).get("dislikeCount", 0),
+            "myReaction": reactions_map.get(rv["id"], {}).get("myReaction", "")
+        })
+
+    cnt = len(reviews)
+    avg_score = round(score_sum / cnt, 2) if cnt > 0 else None
+
+    return {
+        "user": {
+            "id": user_id,
+            "name": display_name
+        },
+        "reviewCount": cnt,
+        "avgScore": avg_score,
+        "reviews": reviews
+    }
 
 
 def get_user_mypage(user_id):
@@ -1352,7 +1546,7 @@ def get_admin_overview():
             "action": lg["action"],
             "targetId": lg["target_id"],
             "detail": lg["detail"] or "",
-            "createdAt": lg["created_at"]
+            "createdAt": _format_kst_timestamp(lg["created_at"])
         }
         for lg in cursor.fetchall()
     ]

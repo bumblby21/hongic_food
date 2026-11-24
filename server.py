@@ -268,7 +268,7 @@ def get_restaurants():
 @app.route("/api/restaurants/<int:id>", methods=["GET"])
 def get_restaurant(id):
     try:
-        restaurant = database.get_restaurant_by_id(id)
+        restaurant = database.get_restaurant_by_id(id, viewer_user_id=session.get("user_id"))
         if not restaurant:
             return jsonify({"success": False, "error": "Not found"}), 404
         return jsonify({"success": True, "data": restaurant})
@@ -287,6 +287,33 @@ def get_users():
 # ============================================================
 # 인증 (회원가입 / 로그인 / 로그아웃) & 마이페이지 / 북마크 API
 # ============================================================
+@app.route("/api/users/<user_id>/reviews", methods=["GET"])
+def get_public_user_reviews_route(user_id):
+    try:
+        data = database.get_public_user_reviews(user_id, viewer_user_id=session.get("user_id"))
+        if not data:
+            return jsonify({"success": False, "error": "작성자 정보를 찾을 수 없습니다."}), 404
+        return jsonify({"success": True, "data": data})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/reviews/<int:review_id>/react", methods=["POST"])
+def react_review_route(review_id):
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "좋아요/싫어요를 남기려면 로그인이 필요합니다."}), 401
+    try:
+        data = request.json or {}
+        reaction = (data.get("reaction") or "").strip().lower()
+        res, err = database.toggle_review_reaction(review_id, user_id, reaction)
+        if err:
+            return jsonify({"success": False, "error": err}), 400
+        return jsonify({"success": True, "data": res})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/auth/me", methods=["GET"])
 def auth_me():
     user_id = session.get("user_id")
