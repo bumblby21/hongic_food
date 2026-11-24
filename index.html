@@ -23,6 +23,8 @@
   <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
   
   <!-- FontAwesome & Google Fonts -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
@@ -1471,6 +1473,29 @@
 
 
     /* Leaflet Pin Styles */
+    .hong-cluster-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: #0f172a;
+      color: #fbbf24;
+      border: 2.5px solid #fbbf24;
+      font-weight: 900;
+      font-size: 13px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.38);
+      transition: transform 0.15s ease;
+    }
+    .hong-cluster-icon.cluster-md {
+      background: #1e293b;
+      font-size: 14px;
+    }
+    .hong-cluster-icon.cluster-lg {
+      background: #991b1b;
+      color: #ffffff;
+      border-color: #fde68a;
+      font-size: 14.5px;
+    }
     .custom-marker {
       display: inline-flex;
       align-items: center;
@@ -6457,11 +6482,34 @@
       }
     }
 
-    // 2. Leaflet Map setup
+    // 2. Leaflet Map setup (with MarkerCluster + viewport side list)
     let map = null;
+    let markerClusterGroup = null;
     let markers = {};
+    let mapMoveDebounceTimer = null;
+    let mapSideDisplayLimit = 40;
 
     const NAVER_MAP_TILE_URL = 'https://map.pstatic.net/nrb/styles/basic/1793947325/{z}/{x}/{y}.png?mt=bg.ol.ts.lko';
+
+    function _formatMapMarkerName(name) {
+      const s = String(name || '').trim();
+      return s.length > 12 ? s.slice(0, 12) + '…' : s;
+    }
+
+    function _buildRestaurantMarkerIcon(r, isHighlighted) {
+      const score = calcScore(r);
+      const customHtml = `
+        <div class="custom-marker" style="${isHighlighted ? 'background:#0f172a;color:#fbbf24;border-color:#fbbf24;transform:translate(-50%, -50%) scale(1.08);' : ''}">
+          ${_formatMapMarkerName(r.name)} ${score.toFixed(2)}
+        </div>
+      `;
+      return L.divIcon({
+        html: customHtml,
+        className: '',
+        iconSize: null,
+        iconAnchor: [0, 0]
+      });
+    }
 
     function initMapIfNeeded() {
       if (!map) {
@@ -6471,13 +6519,47 @@
           maxZoom: 20
         }).addTo(map);
 
+        if (typeof L.markerClusterGroup === 'function') {
+          markerClusterGroup = L.markerClusterGroup({
+            showCoverageOnHover: false,
+            maxClusterRadius: 52,
+            spiderfyOnMaxZoom: true,
+            disableClusteringAtZoom: 17,
+            chunkedLoading: true,
+            iconCreateFunction: function(cluster) {
+              const cnt = cluster.getChildCount();
+              const size = cnt >= 50 ? 44 : (cnt >= 10 ? 38 : 34);
+              const cls = cnt >= 50 ? 'cluster-lg' : (cnt >= 10 ? 'cluster-md' : '');
+              return L.divIcon({
+                html: `<div class="hong-cluster-icon ${cls}" style="width:${size}px;height:${size}px;">${cnt}</div>`,
+                className: '',
+                iconSize: [size, size]
+              });
+            }
+          });
+          map.addLayer(markerClusterGroup);
+        } else {
+          markerClusterGroup = L.layerGroup().addTo(map);
+        }
+
         map.on('click', () => {
           closeMobileMapSheet();
           const preview = document.getElementById('map-pin-preview-card');
           if (preview) preview.classList.remove('open');
         });
+
+        map.on('moveend', () => {
+          if (mapMoveDebounceTimer) clearTimeout(mapMoveDebounceTimer);
+          mapMoveDebounceTimer = setTimeout(() => {
+            mapSideDisplayLimit = 40;
+            renderMapSideList();
+          }, 150);
+        });
       }
-      setTimeout(() => { map.invalidateSize(); }, 200);
+      setTimeout(() => {
+        map.invalidateSize();
+        renderMapSideList();
+      }, 200);
       updateMapPins();
     }
 
@@ -6485,33 +6567,30 @@
 
     function updateMapPins() {
       if (!map) return;
-      Object.values(markers).forEach(m => map.removeLayer(m));
+      if (markerClusterGroup) {
+        markerClusterGroup.clearLayers();
+      } else {
+        Object.values(markers).forEach(m => map.removeLayer(m));
+      }
       markers = {};
 
-      function formatMapMarkerName(name) {
-        const s = String(name || '').trim();
-        return s.length > 12 ? s.slice(0, 12) + '…' : s;
-      }
-
       const filtered = getMapFilteredRestaurants();
+      const newMarkers = [];
       filtered.forEach(r => {
-        const score = calcScore(r);
-        const customHtml = `
-          <div class="custom-marker" style="${highlightedMapId === r.id ? 'background:#0f172a;color:#fbbf24;border-color:#fbbf24;transform:translate(-50%, -50%) scale(1.08);' : ''}">
-            ${formatMapMarkerName(r.name)} ${score.toFixed(2)}
-          </div>
-        `;
-        const icon = L.divIcon({
-          html: customHtml,
-          className: '',
-          iconSize: null,
-          iconAnchor: [0, 0]
-        });
-
-        const marker = L.marker([r.lat, r.lng], { icon }).addTo(map);
+        const icon = _buildRestaurantMarkerIcon(r, highlightedMapId === r.id);
+        const marker = L.marker([r.lat, r.lng], { icon });
         marker.on('click', () => focusRestaurantOnMap(r.id));
         markers[r.id] = marker;
+        newMarkers.push(marker);
       });
+
+      if (markerClusterGroup && typeof markerClusterGroup.addLayers === 'function') {
+        markerClusterGroup.addLayers(newMarkers);
+      } else if (markerClusterGroup) {
+        newMarkers.forEach(m => markerClusterGroup.addLayer(m));
+      } else {
+        newMarkers.forEach(m => m.addTo(map));
+      }
     }
 
     function fitAllMapPins() {
@@ -6524,13 +6603,23 @@
     }
 
     function focusRestaurantOnMap(id) {
+      const prevId = highlightedMapId;
       highlightedMapId = id;
       const r = restaurants.find(x => x.id === id);
       if (!r) return;
-      if (map) {
-        map.flyTo([r.lat, r.lng], 15, { duration: 0.45 });
+
+      if (prevId && prevId !== id && markers[prevId]) {
+        const prevR = restaurants.find(x => x.id === prevId);
+        if (prevR) markers[prevId].setIcon(_buildRestaurantMarkerIcon(prevR, false));
       }
-      updateMapPins();
+      if (markers[id]) {
+        markers[id].setIcon(_buildRestaurantMarkerIcon(r, true));
+      }
+
+      if (map) {
+        const targetZoom = Math.max(map.getZoom(), 16);
+        map.flyTo([r.lat, r.lng], targetZoom, { duration: 0.45 });
+      }
       renderMapSideList();
 
       // PC: scroll side item into view
@@ -6672,22 +6761,52 @@
       updateMapPins();
     }
 
+    function loadMoreMapSideList() {
+      mapSideDisplayLimit += 40;
+      renderMapSideList();
+    }
+
     function renderMapSideList() {
       const container = document.getElementById('map-side-list');
       if (!container) return;
-      const filtered = getMapFilteredRestaurants();
+      const allFiltered = getMapFilteredRestaurants();
+
+      // Show only restaurants inside current map viewport (unless user is actively searching by keyword)
+      let visibleList = allFiltered;
+      let usingViewport = false;
+      if (map && !searchQuery) {
+        try {
+          const bounds = map.getBounds();
+          if (bounds && bounds.isValid()) {
+            visibleList = allFiltered.filter(r => bounds.contains([r.lat, r.lng]));
+            usingViewport = true;
+          }
+        } catch (e) {}
+      }
 
       const pcCnt = document.getElementById('map-pc-count');
       const shCnt = document.getElementById('map-sheet-count');
-      if (pcCnt) pcCnt.innerText = `맛집 ${filtered.length}곳`;
-      if (shCnt) shCnt.innerText = `주변 맛집 ${filtered.length}곳`;
+      if (pcCnt) pcCnt.innerText = usingViewport ? `현 지도 맛집 ${visibleList.length}곳` : `맛집 ${visibleList.length}곳`;
+      if (shCnt) shCnt.innerText = usingViewport ? `현 지도 맛집 ${visibleList.length}곳` : `주변 맛집 ${visibleList.length}곳`;
 
-      if (filtered.length === 0) {
-        container.innerHTML = `<div style="padding:36px 12px; text-align:center; color:#94a3b8; font-size:13px;">조건에 맞는 맛집이 없습니다.</div>`;
+      if (visibleList.length === 0) {
+        if (usingViewport && allFiltered.length > 0) {
+          container.innerHTML = `
+            <div style="padding:36px 12px; text-align:center; color:#94a3b8; font-size:13px;">
+              현재 지도 화면 안에 등록된 맛집이 없습니다.<br>
+              <button type="button" onclick="fitAllMapPins()" style="margin-top:12px; background:#0f172a; color:#fff; border:none; border-radius:6px; padding:7px 14px; font-size:12px; font-weight:700; cursor:pointer;">전체 맛집 ${allFiltered.length}곳 보기</button>
+            </div>
+          `;
+        } else {
+          container.innerHTML = `<div style="padding:36px 12px; text-align:center; color:#94a3b8; font-size:13px;">조건에 맞는 맛집이 없습니다.</div>`;
+        }
         return;
       }
 
-      container.innerHTML = filtered.map((r, idx) => {
+      const sliced = visibleList.slice(0, mapSideDisplayLimit);
+      const remaining = visibleList.length - sliced.length;
+
+      const itemsHtml = sliced.map((r, idx) => {
         const score = calcScore(r);
         const hl = highlightedMapId === r.id ? 'highlighted' : '';
         return `
@@ -6707,6 +6826,12 @@
           </div>
         `;
       }).join('');
+
+      const moreBtnHtml = remaining > 0
+        ? `<div style="padding:12px 0 18px; text-align:center;"><button type="button" onclick="loadMoreMapSideList()" style="background:#f8fafc; border:1px solid #cbd5e1; color:#0f172a; border-radius:8px; padding:8px 18px; font-size:12.5px; font-weight:700; cursor:pointer;">더 보기 (남은 ${remaining}곳)</button></div>`
+        : '';
+
+      container.innerHTML = itemsHtml + moreBtnHtml;
     }
 
     function openMobileMapSheet() {
