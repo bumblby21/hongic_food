@@ -6522,9 +6522,9 @@
         if (typeof L.markerClusterGroup === 'function') {
           markerClusterGroup = L.markerClusterGroup({
             showCoverageOnHover: false,
-            maxClusterRadius: 52,
+            maxClusterRadius: 28,
             spiderfyOnMaxZoom: true,
-            disableClusteringAtZoom: 17,
+            disableClusteringAtZoom: 15,
             chunkedLoading: true,
             iconCreateFunction: function(cluster) {
               const cnt = cluster.getChildCount();
